@@ -1,0 +1,14 @@
+name: ci-red-to-green
+version: 0.1.0
+description: "Red GitHub Actions run in, proven fix PR out: the PR is offered only after Hermes's own pytest output shows the failing test failed before the fix and passed three times after, and it carries source files only."
+author: kinnuworks
+provides_tools: []
+provides_hooks:
+  - pre_llm_call
+  - pre_tool_call
+  - post_tool_call
+requires_env:
+  - name: CI_RED_TO_GREEN_GITHUB_TOKEN
+    description: "Fine-grained GitHub token for the watched repo: Actions read, Contents read/write, Pull requests read/write"
+    url: "https://github.com/settings/personal-access-tokens/new"
+    secret: true
