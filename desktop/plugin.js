@@ -289,6 +289,17 @@ function Body({ ctx, wide }) {
       }, 'e')
     )
   }
+  if (s.queue && s.queue.length) {
+    parts.push(
+      jsx('div', {
+        style: { fontSize: '0.75rem', color: MUTED },
+        children: 'Queued: ' + s.queue.map((q) => `${q.repo} run #${q.run_number}`).join(', ')
+      }, 'q')
+    )
+  }
+  if (wide && s.watches && s.watches.length > 1) {
+    parts.push(jsx('div', { style: { fontSize: '0.75rem', color: MUTED }, children: 'Watching ' + s.watches.map((w) => `${w.repo} @ ${w.branch}`).join(' · ') }, 'ws'))
+  }
   if (wide || !s.watch || (inc && inc.status === 'done')) {
     parts.push(jsx(WatchForm, { ctx, actions }, 'w'))
     parts.push(jsxs('div', { style: { display: 'flex', alignItems: 'center', gap: 8, color: MUTED, fontSize: '0.75rem' }, children: [demoBtn, 'A real humanize bug on a bundled copy. No token or GitHub needed.'] }, 'd'))

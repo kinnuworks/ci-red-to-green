@@ -134,6 +134,7 @@ class Incident:
     suspects: list[dict] = field(default_factory=list)  # commits since then: sha, title, author
     opened_at: float = 0.0
     runner: str = "pytest"
+    repo: str = ""
 
     def ledger(self) -> ledger.Ledger:
         lg = ledger.Ledger(self.test_ids, parse=runners.get(self.runner).parse_results)
@@ -164,7 +165,8 @@ class Engine:
         self._lock = threading.RLock()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
-        self.watch: Watch | None = None
+        self.watches: list[Watch] = []
+        self.queue: list[dict] = []  # red runs waiting while another incident is open
         self.incident: Incident | None = None
         self.history: list[dict] = []
         self._blobs: dict[str, bytes] = {}
@@ -180,8 +182,8 @@ class Engine:
             raw = json.loads(self._state_file.read_text())
         except (OSError, ValueError):
             return
-        if raw.get("watch"):
-            self.watch = Watch(**raw["watch"])
+        self.watches = [Watch(**w) for w in raw.get("watches") or ([raw["watch"]] if raw.get("watch") else [])]
+        self.queue = raw.get("queue") or []
         if raw.get("incident"):
             self.incident = Incident(**raw["incident"])
         self.history = raw.get("history") or []
@@ -190,7 +192,8 @@ class Engine:
         with self._lock:
             tmp = self._state_file.with_suffix(".tmp")
             tmp.write_text(json.dumps({
-                "watch": asdict(self.watch) if self.watch else None,
+                "watches": [asdict(w) for w in self.watches],
+                "queue": self.queue,
                 "incident": asdict(self.incident) if self.incident else None,
                 "history": self.history[:20],
             }))
@@ -201,27 +204,60 @@ class Engine:
             except Exception:
                 pass
 
+    @property
+    def watch(self) -> Watch | None:
+        """The watch the current incident belongs to, else the first one."""
+        inc = self.incident
+        if inc and inc.repo:
+            for w in self.watches:
+                if w.repo == inc.repo:
+                    return w
+        return self.watches[0] if self.watches else None
+
+    def _watch_for(self, repo: str) -> Watch | None:
+        return next((w for w in self.watches if w.repo == repo), None)
+
     # ---- github ----------------------------------------------------------------
-    def gh(self) -> GitHub:
-        if self.watch and self.watch.demo:
-            return demo.DemoGitHub(None, self.watch.repo, self.data_dir)
+    def gh(self, repo: str | None = None) -> GitHub:
+        w = self._watch_for(repo) if repo else self.watch
+        if w and w.demo:
+            return demo.DemoGitHub(None, w.repo, self.data_dir)
         token = self._token_fn()
         if not token:
             raise GitHubError(401, "CI_RED_TO_GREEN_GITHUB_TOKEN is not set")
-        return self._gh_factory(token, self.watch.repo)
+        return self._gh_factory(token, repo or (w.repo if w else ""))
 
     # ---- watching ---------------------------------------------------------------
     def start_watch(self, repo: str, branch: str) -> str:
+        """Add (or re-point) a watch. Several repos can be watched; incidents are fixed one at a time."""
         with self._lock:
-            old = self.watch
-            if self.incident and old and (old.repo, old.branch) != (repo, branch) and self.incident.status in ("alerted", "fixing", "ready", "ci_red"):
-                self.incident.status = "discarded"  # an open incident belongs to the old watch
-            self.watch = Watch(repo=repo, branch=branch)
-            gh = self.gh()
+            inc = self.incident
+            active = inc and inc.status in ("alerted", "fixing", "ready", "ci_red")
+            old = self._watch_for(repo)
+            if active and (self.watch and self.watch.demo or (old and inc.repo == repo and old.branch != branch)):
+                inc.status = "discarded"  # it belongs to the demo or to the old branch
+            self.watches = [w for w in self.watches if not w.demo and w.repo != repo]
+            self.queue = [q for q in self.queue if q["repo"] != repo]
+            w = Watch(repo=repo, branch=branch)
+            self.watches.append(w)
+            gh = self.gh(repo)
             # Everything already finished counts as seen; only new red runs alert.
-            self.watch.seen = [r["id"] for r in gh.runs(branch=branch) if r.get("status") == "completed"]
+            w.seen = [r["id"] for r in gh.runs(branch=branch) if r.get("status") == "completed"]
             self.save()
-        return f"Watching {repo} @ {branch}. I'll message you here when CI goes red."
+        others = [f"{x.repo} @ {x.branch}" for x in self.watches if x.repo != repo]
+        also = f" Also watching: {', '.join(others)}." if others else ""
+        return f"Watching {repo} @ {branch}. I'll message you here when CI goes red.{also}"
+
+    def unwatch(self, repo: str) -> str:
+        with self._lock:
+            if not self._watch_for(repo):
+                return f"Not watching {repo}."
+            if self.incident and self.incident.repo == repo and self.incident.status in ("alerted", "fixing", "ready", "ci_red"):
+                self.incident.status = "discarded"
+            self.watches = [w for w in self.watches if w.repo != repo]
+            self.queue = [q for q in self.queue if q["repo"] != repo]
+            self.save()
+        return f"Stopped watching {repo}."
 
     def _archive(self) -> None:
         """Keep a short record of the incident being replaced, for the Desktop history page."""
@@ -229,7 +265,7 @@ class Engine:
         if not inc:
             return
         self.history.insert(0, {
-            "repo": self.watch.repo if self.watch else "", "run_number": inc.run_number, "run_url": inc.run_url,
+            "repo": inc.repo or (self.watch.repo if self.watch else ""), "run_number": inc.run_number, "run_url": inc.run_url,
             "branch": inc.branch, "sha": inc.head_sha[:7], "tests": len(inc.test_ids), "first_test": inc.test_ids[0] if inc.test_ids else "",
             "status": inc.status, "pr_url": inc.pr_url, "pr_run_url": inc.pr_run_url, "opened_at": inc.opened_at,
             "suspects": inc.suspects[:1],
@@ -241,7 +277,8 @@ class Engine:
         with self._lock:
             if self.incident and self.incident.status not in ("done", "discarded"):
                 self.incident.status = "discarded"
-            self.watch = Watch(repo=demo.REPO, branch="main", demo=True)
+            self.watches = [Watch(repo=demo.REPO, branch="main", demo=True)]
+            self.queue = []
             demo.copy_sample(str(self.data_dir / "worktrees" / str(demo.RUN_ID)))
             self.save()
             self.tick()
@@ -275,28 +312,46 @@ class Engine:
     def stop_thread(self) -> None:
         self._stop.set()
 
+    def _busy(self) -> bool:
+        inc = self.incident
+        return bool(inc and inc.status in ("alerted", "fixing", "ready", "pr_open"))
+
     def tick(self) -> None:
-        if not self.watch:
+        if not self.watches:
             return
-        gh = self.gh()
         inc = self.incident
         if inc and inc.status == "pr_open":
-            self._follow_pr(gh, inc)
-        if inc and inc.status in ("alerted", "fixing", "ready", "pr_open"):
-            return  # one incident at a time
-        for run in gh.runs(branch=self.watch.branch):
-            if run.get("status") != "completed" or run["id"] in self.watch.seen:
-                continue
-            self.watch.seen.append(run["id"])
+            self._follow_pr(self.gh(inc.repo or None), inc)
+        for w in list(self.watches):
+            gh = self.gh(w.repo)
+            for run in gh.runs(branch=w.branch):
+                if run.get("status") != "completed" or run["id"] in w.seen:
+                    continue
+                w.seen.append(run["id"])
+                del w.seen[:-200]
+                self.save()
+                if run.get("conclusion") != "failure":
+                    continue
+                if not self._busy():
+                    self._open_incident(gh, run, w)
+                elif self.incident.repo != w.repo:
+                    # one fix at a time: another repo's red run waits its turn
+                    self.queue.append({"repo": w.repo, "branch": w.branch, "run": run})
+                    self.save()
+                    self._post(f"Also red: {w.repo} @ {w.branch} (run #{run.get('run_number')}). "
+                               f"Queued; I'll pick it up when the current fix for {self.incident.repo} is done or discarded.")
+                # a newer red run on the repo being fixed is the same incident, so it's skipped
+        while not self._busy() and self.queue:
+            q = self.queue.pop(0)
+            w = self._watch_for(q["repo"])
+            if w:
+                self._open_incident(self.gh(w.repo), q["run"], w)
             self.save()
-            if run.get("conclusion") == "failure":
-                self._open_incident(gh, run)
-                return
 
-    def _suspects(self, gh: GitHub, run: dict) -> tuple[str, list[dict]]:
+    def _suspects(self, gh: GitHub, run: dict, w: Watch) -> tuple[str, list[dict]]:
         """The last green commit before this red run, and the commits that came in since."""
         try:
-            runs = gh.runs(branch=self.watch.branch, per_page=30)
+            runs = gh.runs(branch=w.branch, per_page=30)
             ids = [r["id"] for r in runs]
             older = runs[ids.index(run["id"]) + 1:] if run["id"] in ids else []
             green = next((r for r in older if r.get("status") == "completed" and r.get("conclusion") == "success"
@@ -319,7 +374,7 @@ class Engine:
             return f'Since the last green run: {c["sha"][:7]} "{c["title"]}"' + (f' by {c["author"]}' if c["author"] else "")
         return f"Since the last green run ({inc.last_green[:7]}): {len(inc.suspects)} commits, newest {inc.suspects[-1]['sha'][:7]} \"{inc.suspects[-1]['title']}\""
 
-    def _open_incident(self, gh: GitHub, run: dict) -> None:
+    def _open_incident(self, gh: GitHub, run: dict, w: Watch) -> None:
         failure = logparse.Failure()
         for job in gh.failed_jobs(run["id"]):
             f = runners.parse_any(gh.job_log(job["id"]))
@@ -332,14 +387,14 @@ class Engine:
                     failure.test_ids.append(t)
                     failure.reasons[t] = f.reasons.get(t, "")
         if not failure:
-            self._post(f"CI red on {self.watch.branch} (run #{run.get('run_number')}), but I couldn't find a failing pytest or go test in the log, so there's nothing I can reproduce. {run.get('html_url', '')}")
+            self._post(f"CI red on {w.repo} @ {w.branch} (run #{run.get('run_number')}), but I couldn't find a failing pytest or go test in the log, so there's nothing I can reproduce. {run.get('html_url', '')}")
             return
         wt = str(self.data_dir / "worktrees" / str(run["id"]))
-        green, suspects = self._suspects(gh, run)
+        green, suspects = self._suspects(gh, run, w)
         self._archive()
         self.incident = Incident(
             run_id=run["id"], run_number=run.get("run_number", 0), run_url=run.get("html_url", ""),
-            head_sha=run["head_sha"], branch=self.watch.branch, test_ids=failure.test_ids,
+            head_sha=run["head_sha"], branch=w.branch, repo=w.repo, test_ids=failure.test_ids,
             reasons=failure.reasons, command=runners.get(failure.runner).command(failure.test_ids), worktree=wt,
             last_green=green, suspects=suspects, opened_at=self._clock(), runner=failure.runner,
         )
@@ -349,7 +404,7 @@ class Engine:
         why = failure.reasons.get(first, "")
         sus = self._suspect_line(self.incident)
         self._post(
-            f"CI red on {self.watch.branch}: {first}{more}\n"
+            f"CI red on {w.branch}{'' if len(self.watches) < 2 else ' of ' + w.repo}: {first}{more}\n"
             f"{why}\n"
             f"run #{run.get('run_number')} · {run['head_sha'][:7]}\n"
             + (sus + "\n" if sus else "")
@@ -584,6 +639,9 @@ class Engine:
                 "diff": self.diff(80) if inc.status in ("fixing", "ready", "pr_open", "done") and os.path.isdir(inc.worktree) else "",
             }
         out["demo"] = bool(self.watch and self.watch.demo)
+        out["watches"] = [{"repo": w.repo, "branch": w.branch} for w in self.watches]
+        out["queue"] = [{"repo": q["repo"], "branch": q["branch"], "run_number": q["run"].get("run_number"),
+                         "run_url": q["run"].get("html_url", "")} for q in self.queue]
         out["history"] = self.history[:20]
         return out
 
@@ -591,15 +649,18 @@ class Engine:
         if self.incident:
             self.incident.status = "discarded"
             self.save()
-        return "Discarded. Nothing was pushed."
+        nxt = f" Next in the queue: {self.queue[0]['repo']} (run #{self.queue[0]['run'].get('run_number')})." if self.queue else ""
+        return "Discarded. Nothing was pushed." + nxt
 
     def status(self) -> str:
         if not self.watch:
             return "Not watching anything. Usage: /ci watch owner/repo [branch]"
-        s = f"Watching {self.watch.repo} @ {self.watch.branch}."
+        s = "Watching " + ", ".join(f"{w.repo} @ {w.branch}" for w in self.watches) + "."
         inc = self.incident
         if inc and inc.status not in ("done", "discarded"):
             s += f"\nIncident: run #{inc.run_number}, {', '.join(inc.test_ids)}, status {inc.status}."
             if inc.pr_url:
                 s += f"\nPR: {inc.pr_url}"
+        if self.queue:
+            s += "\nQueued: " + ", ".join(f"{q['repo']} run #{q['run'].get('run_number')}" for q in self.queue)
         return s

@@ -18,7 +18,8 @@ _ENGINE = None
 TOKEN_ENV = "CI_RED_TO_GREEN_GITHUB_TOKEN"
 USAGE = (
     "/ci demo                       try it now: a real humanize bug, no token or GitHub needed\n"
-    "/ci watch owner/repo [branch]  start watching a branch\n"
+    "/ci watch owner/repo [branch]  watch a branch (add more repos the same way)\n"
+    "/ci unwatch owner/repo         stop watching one repo\n"
     "/ci                            show the fix proof and open the PR\n"
     "/ci status                     what I'm watching\n"
     "/ci discard                    drop the current incident\n"
@@ -73,6 +74,10 @@ def register(ctx):
             # The watcher thread dies with the gateway; any /ci in this chat re-arms it here.
             bound = contextvars.copy_context()
             engine.start_thread(runner=lambda fn: bound.run(fn))
+        if sub == "unwatch":
+            if len(args) < 2:
+                return "Usage: /ci unwatch owner/repo"
+            return engine.unwatch(args[1])
         if sub == "discard":
             return engine.discard()
         if sub == "stop":
@@ -139,7 +144,7 @@ def register(ctx):
         skills=["ci-red-to-green:fix-red-ci"],
         tags=["ci", "github", "daily"],
     )
-    ctx.register_command("ci", ci, description="Turn red CI into a proven fix PR", args_hint="[demo|watch owner/repo [branch]|status|discard|stop]")
+    ctx.register_command("ci", ci, description="Turn red CI into a proven fix PR", args_hint="[demo|watch owner/repo [branch]|unwatch owner/repo|status|discard|stop]")
     ctx.register_hook("pre_llm_call", on_pre_llm_call)
     ctx.register_hook("pre_tool_call", on_pre_tool_call)
     ctx.register_hook("post_tool_call", on_post_tool_call)

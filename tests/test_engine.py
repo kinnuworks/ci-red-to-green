@@ -18,7 +18,8 @@ class FakeGH:
     def runs(self, branch=None, head_sha=None, per_page=10):
         if head_sha:
             return self.state["pr_runs"]
-        return self.state["runs"]
+        runs = self.state["runs"]
+        return runs.get(self.repo, []) if isinstance(runs, dict) else runs
 
     def failed_jobs(self, run_id):
         return [{"id": 7}]
@@ -191,18 +192,36 @@ def test_unreproducible_failure_says_so(tmp_path):
     assert "couldn't find a failing pytest or go test" in posts[-1] and eng.incident is None
 
 
-def test_switching_repo_sets_aside_the_open_incident(tmp_path):
+def test_several_repos_queue_behind_the_open_incident(tmp_path):
+    eng, posts = make(tmp_path)
+    FakeGH.state["runs"] = {}
+    eng.start_watch("o/r", "main")
+    assert "Also watching" in eng.start_watch("o/other", "dev")
+    FakeGH.state["runs"] = {"o/r": [red_run(5)], "o/other": [red_run(9)]}
+    eng.tick()
+    assert eng.incident.repo == "o/r" and eng.incident.run_number == 5
+    assert "Also red: o/other @ dev (run #9). Queued" in posts[-1]
+    assert eng.snapshot()["queue"][0]["repo"] == "o/other"
+    eng.tick()  # nothing new: the queued run isn't posted twice
+    assert sum("Also red" in p for p in posts) == 1
+    assert "Next in the queue: o/other" in eng.discard()
+    eng.tick()
+    assert eng.incident.repo == "o/other" and eng.incident.branch == "dev" and eng.incident.status == "alerted"
+    assert "CI red on dev of o/other" in posts[-1]
+    assert eng.watch.repo == "o/other"
+    assert "o/other" in eng.fix_context() and eng.queue == []
+
+
+def test_repointing_a_repo_to_another_branch_sets_aside_its_incident(tmp_path):
     eng, posts = make(tmp_path)
     eng.start_watch("o/r", "main")
     FakeGH.state["runs"] = [red_run()]
     eng.tick()
-    assert eng.incident.status == "alerted"
     FakeGH.state["runs"] = []
-    eng.start_watch("o/other", "main")
+    eng.start_watch("o/r", "release")
     assert eng.incident.status == "discarded"
-    FakeGH.state["runs"] = [red_run(7)]
-    eng.tick()
-    assert eng.incident.status == "alerted" and eng.incident.run_number == 7
+    assert [w.branch for w in eng.watches] == ["release"]
+    assert "Stopped watching o/r" in eng.unwatch("o/r") and eng.watches == []
 
 
 def test_fake_output_is_ignored(tmp_path):
