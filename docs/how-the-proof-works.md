@@ -8,7 +8,7 @@ A fix PR is offered only when the record shows this for every failing test:
 
 1. **Green before.** With only the source files changed since the last green run put back as they were, the test passes. That shows the regression came in with those commits, not from the environment or a flaky test.
 2. **Red now.** On the red commit, before any source changes, the test fails, twice.
-3. **Green with the fix.** After the change, the test passes three runs in a row, and a full-suite run shows every test that passed before still passes (failing, being skipped or disappearing all count against the fix).
+3. **Green with the fix.** After the change, the test passes three runs in a row, and a full-suite run shows every test that passed before still passes (failing, erroring or being skipped all count against the fix).
 
 Here is the table from a real run, [PR #4](https://github.com/kinnuworks/datekit-demo/pull/4). A commit changed `calendar.monthrange(year, month)[1]` to `[0]`, the weekday of the first day instead of the number of days, and five tests went red:
 

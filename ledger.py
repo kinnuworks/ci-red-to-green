@@ -115,7 +115,7 @@ class Ledger:
 
     def new_failures(self, state: str | None = None) -> list[str] | None:
         """Tests that passed in the last full-suite run before the change and don't pass in the last
-        one after: failed, errored, skipped, or missing from a run that reports passes.
+        one after: failed, errored or skipped.
 
         None means no before/after pair of full-suite runs was recorded (for this source state)."""
         before = [r for r in self._main() if r.full_suite and not r.changed]
@@ -123,9 +123,10 @@ class Ledger:
         if not before or not after:
             return None
         b, a = before[-1].results, after[-1].results
-        reports_passes = any(o == "PASSED" for o in a.values())
+        # A test missing from the after run is not counted: Hermes may cut long terminal output,
+        # so a full-suite run can record only part of the per-test lines.
         return sorted(t for t, o in b.items() if o == "PASSED" and t not in self.test_ids
-                      and (a.get(t) not in ("PASSED", None) or (t not in a and reports_passes)))
+                      and a.get(t) not in ("PASSED", None))
 
     def verdict(self, state: str | None = None, need_green: bool = False) -> tuple[bool, list[str]]:
         """(accepted, reasons). Reasons explain every unmet condition. need_green: a last green
