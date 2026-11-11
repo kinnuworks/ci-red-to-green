@@ -39,7 +39,8 @@ def snapshot(root: str) -> dict[str, str]:
     """sha256 of every regular file under root, keyed by posix relative path."""
     out: dict[str, str] = {}
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
+        # git submodules and nested repos are other projects: never part of the fix, so not scanned
+        dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS and not os.path.exists(os.path.join(dirpath, d, ".git"))]
         for f in filenames:
             full = os.path.join(dirpath, f)
             if os.path.islink(full) or not os.path.isfile(full):

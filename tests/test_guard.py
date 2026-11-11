@@ -36,3 +36,14 @@ def test_files_that_shadow_the_runner_are_protected():
     for p in ("pytest.py", "sitecustomize.py", "src/usercustomize.py", "pytest/__init__.py", "evil.pth"):
         assert guard.is_protected(p), p
     assert not guard.is_protected("src/pkg/pytest_helpers.py")
+
+
+def test_submodules_and_nested_repos_are_not_scanned(tmp_path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "a.py").write_text("x = 1\n")
+    sub = tmp_path / "extern" / "lib"
+    (sub / "test").mkdir(parents=True)
+    (sub / ".git").write_text("gitdir: ../../.git/modules/lib\n")  # how git marks a submodule checkout
+    (sub / "test" / "t.cpp").write_text("int main() {}\n")
+    snap = guard.snapshot(str(tmp_path))
+    assert "src/a.py" in snap and not any(p.startswith("extern/") for p in snap)
