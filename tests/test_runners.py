@@ -51,7 +51,7 @@ def test_go_ledger_gate():
     for out, changed in [(red, False), (red, False), (green, True), (green, True), (green, True)]:
         lg.record(out, None, changed)
     lg.record(red, None, False, full_suite=True)
-    lg.record(green.replace("ok  ", "ok  ") + "--- PASS: TestHuman (0.00s)\nok  \texample.com/demo/size\t0.1s\n", None, True, full_suite=True)
+    lg.record(green.replace("ok  ", "ok  ") + "--- PASS: TestHuman (0.00s)\nok  \texample.com/demo/size\t0.1s\n=== RUN   TestAdd\n--- PASS: TestAdd (0.00s)\nok  \texample.com/demo/util\t0.1s\n", None, True, full_suite=True)
     assert lg.verdict() == (True, [])
 
 

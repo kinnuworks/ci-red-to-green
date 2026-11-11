@@ -30,3 +30,9 @@ def test_changes_and_split():
 def test_django_style_test_modules_are_protected():
     from crg import guard as g
     assert g.is_protected("app/tests.py") and g.is_protected("pkg/test.py") and not g.is_protected("pkg/testing_utils.py")
+
+
+def test_files_that_shadow_the_runner_are_protected():
+    for p in ("pytest.py", "sitecustomize.py", "src/usercustomize.py", "pytest/__init__.py", "evil.pth"):
+        assert guard.is_protected(p), p
+    assert not guard.is_protected("src/pkg/pytest_helpers.py")

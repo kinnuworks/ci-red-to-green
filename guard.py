@@ -13,6 +13,8 @@ from pathlib import PurePosixPath
 
 _SKIP_DIRS = {".git", ".venv", "venv", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", "node_modules", ".tox", "build", "dist"}
 _TEST_CONFIG = {"conftest.py", "pytest.ini", "tox.ini", "setup.cfg", "pyproject.toml", "noxfile.py"}
+# Files that would be imported in place of the test runner or run at interpreter start.
+_SHADOWS = {"pytest.py", "_pytest.py", "sitecustomize.py", "usercustomize.py", "pytest", "_pytest"}
 
 
 def is_protected(path: str) -> bool:
@@ -24,7 +26,7 @@ def is_protected(path: str) -> bool:
         return True
     if name.startswith("test_") or name.endswith(("_test.py", "_test.go")) or name in ("tests.py", "test.py"):
         return True
-    if name in _TEST_CONFIG:
+    if name in _TEST_CONFIG or name in _SHADOWS or (p.parts and p.parts[0] in _SHADOWS) or name.endswith(".pth"):
         return True
     if p.parts and p.parts[0] == ".github":
         return True

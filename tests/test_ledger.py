@@ -114,3 +114,10 @@ def test_results_with_nested_brackets():
         "tests/test_number.py::test_metric[[9999]-10.0 k]": "PASSED",
         "tests/test_number.py::test_metric[[99999]-100 k]": "FAILED",
     }
+
+
+def test_tests_that_vanish_or_skip_after_the_change_count_as_regressions():
+    lg = ledger.Ledger([T])
+    lg.record(f"FAILED {T}\nPASSED tests/a.py::gone\nPASSED tests/a.py::skipped\nPASSED tests/a.py::kept\n", 1, False, full_suite=True)
+    lg.record(f"PASSED {T}\nSKIPPED tests/a.py::skipped\nPASSED tests/a.py::kept\n", 0, True, full_suite=True)
+    assert lg.new_failures() == ["tests/a.py::gone", "tests/a.py::skipped"]

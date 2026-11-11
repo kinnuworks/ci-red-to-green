@@ -8,7 +8,7 @@ A fix PR is offered only when the record shows this for every failing test:
 
 1. **Green before.** With only the source files changed since the last green run put back as they were, the test passes. That shows the regression came in with those commits, not from the environment or a flaky test.
 2. **Red now.** On the red commit, before any source changes, the test fails, twice.
-3. **Green with the fix.** After the change, the test passes three runs in a row, and a full-suite run shows no test that passed before now fails.
+3. **Green with the fix.** After the change, the test passes three runs in a row, and a full-suite run shows every test that passed before still passes (failing, being skipped or disappearing all count against the fix).
 
 Here is the table from a real run, [PR #4](https://github.com/kinnuworks/datekit-demo/pull/4). A commit changed `calendar.monthrange(year, month)[1]` to `[0]`, the weekday of the first day instead of the number of days, and five tests went red:
 
@@ -27,7 +27,7 @@ From the red run to GitHub saying green on the fix took about five minutes, incl
 - **Only real runs count.** The terminal call has to be the test command itself: `cd`, `source` or variables may come before it, nothing after it, no pipes or redirection. Only the lines between the runner's own session header and summary are read, so a model that echoes `PASSED` gets nothing.
 - **It knows what state each run was in.** For every run, the plugin hashes the fix folder against the red commit and the last green commit. A run made with the source restored to green counts as "green before". A run made while any test file or test config is edited never counts, even if the edit is undone later.
 - **One pass before the fix means flaky.** If a failing test passes even once before any change, the card says flaky and no PR is offered.
-- **The PR is built by code, not the model.** The plugin makes the commit from changed source files only. Tests, `testdata`, `conftest.py`, pytest/tox/setup config, `.github` and anything your `.gitignore` files match never go in, so GitHub runs your original tests against the fix.
+- **The PR is built by code, not the model.** The plugin makes the commit from changed source files only. Tests, `testdata`, `conftest.py`, pytest/tox/setup config, `.github`, files that could stand in for the runner (`pytest.py`, `sitecustomize.py`, `.pth`) and anything your `.gitignore` files match never go in, so GitHub runs your original tests against the fix.
 - **GitHub has the last word.** After Open PR, the plugin waits for every workflow on the PR. "Done" means GitHub says green, and nothing is ever merged or pushed to your base branch.
 - **You approve the first command that runs your code.** The plugin escalates it to Hermes's approval prompt, with the command shown, whether it's an install or the first test run.
 
