@@ -7,6 +7,7 @@ __init__.py. This module takes plain callables so it can be tested without Herme
 
 from __future__ import annotations
 
+import fnmatch
 import hashlib
 import json
 import os
@@ -29,9 +30,52 @@ def git_blob_sha(data: bytes) -> str:
     return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
 
 
-def blob_snapshot(root: str) -> dict[str, str]:
-    """git blob sha of every file in the worktree (skipping caches), keyed by relative path."""
+# Commands that only read or fetch, and never run the repo's own code. Anything else in the
+# fix folder (pytest, pip install, python, make, tox...) counts as running the repo's code.
+_READ_ONLY = re.compile(
+    r"^(?:cd|ls|cat|head|tail|grep|rg|find|wc|pwd|echo|sed|diff|tree|file|stat|true"
+    r"|git\s+(?:-C\s+\S+\s+)?(?:clone|status|diff|log|show|fetch|checkout|switch|rev-parse|branch|ls-files|blame|stash))\b"
+)
+
+
+def runs_repo_code(command: str) -> bool:
+    """True unless every part of the command is a known read-only step."""
+    parts = [p.strip() for p in re.split(r"&&|\|\||;|\|", command or "")]
+    return any(p and not _READ_ONLY.match(p) for p in parts)
+
+
+def _ignore_patterns(root: str) -> list[str]:
+    try:
+        with open(os.path.join(root, ".gitignore"), encoding="utf-8", errors="replace") as fh:
+            lines = [ln.strip() for ln in fh]
+    except OSError:
+        return []
+    return [ln for ln in lines if ln and not ln.startswith(("#", "!"))]
+
+
+def _ignored(rel: str, patterns: list[str]) -> bool:
+    parts = rel.split("/")
+    for pat in patterns:
+        anchored = pat.startswith("/")
+        p = pat.strip("/")
+        if pat.endswith("/"):  # directory pattern: any parent dir matches
+            dirs = parts[:-1]
+            cands = ["/".join(dirs[: i + 1]) for i in range(len(dirs))] if "/" in p or anchored else dirs
+        elif "/" in p or anchored:
+            cands = [rel] + ["/".join(parts[: i + 1]) for i in range(len(parts) - 1)]
+        else:
+            cands = parts
+        if any(fnmatch.fnmatchcase(c, p) for c in cands):
+            return True
+    return False
+
+
+def blob_snapshot(root: str, tracked: dict[str, str] | None = None) -> dict[str, str]:
+    """git blob sha of every file in the worktree, keyed by relative path. Caches and files
+    matched by the repo's top-level .gitignore are skipped, unless the base commit tracks them."""
     out: dict[str, str] = {}
+    tracked = tracked or {}
+    patterns = _ignore_patterns(root)
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if d not in guard._SKIP_DIRS and not d.endswith(".egg-info")]
         for f in filenames:
@@ -39,6 +83,8 @@ def blob_snapshot(root: str) -> dict[str, str]:
             if os.path.islink(full) or not os.path.isfile(full) or f.endswith((".pyc", ".pyo")):
                 continue
             rel = os.path.relpath(full, root).replace(os.sep, "/")
+            if rel not in tracked and _ignored(rel, patterns):
+                continue
             with open(full, "rb") as fh:
                 out[rel] = git_blob_sha(fh.read())
     return out
@@ -254,11 +300,12 @@ class Engine:
         inc = self.incident
         if not inc or not os.path.isdir(inc.worktree):
             return {}, {}
-        ch = guard.changes(inc.base_tree, blob_snapshot(inc.worktree))
+        ch = guard.changes(inc.base_tree, blob_snapshot(inc.worktree, inc.base_tree))
         return guard.split(ch)
 
     def needs_approval(self, tool_name: str, args: dict) -> str | None:
-        """pre_tool_call: the first pytest run in the worktree goes through Hermes's approval prompt.
+        """pre_tool_call: the first command that runs the repo's code in the worktree (pytest, an
+        install, python...) goes through Hermes's approval prompt; read-only steps don't.
         Pushes from the worktree are blocked: the PR only goes out through /ci."""
         inc = self.incident
         if not inc or inc.status != "fixing" or tool_name != "terminal":
@@ -268,7 +315,7 @@ class Engine:
             return None
         if re.search(r"\bgit\b[^;&|]*\bpush\b|\bgh\s+pr\b", cmd):
             return "block"
-        if "pytest" in cmd and not inc.approved_repro:
+        if runs_repo_code(cmd) and not inc.approved_repro:
             inc.approved_repro = True
             self.save()
             return "approve"

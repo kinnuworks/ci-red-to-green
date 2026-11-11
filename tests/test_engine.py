@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from crg import engine as E
 
 T = "tests/test_dates.py::test_parse_iso"
@@ -230,3 +232,47 @@ def test_snapshot_for_desktop(tmp_path):
     assert s["incident"]["proof"]["needed"] == 3 and s["incident"]["proof"]["accepted"] is False
     eng.discard()
     assert eng.snapshot()["incident"] is None
+
+
+@pytest.mark.parametrize(
+    "cmd,runs",
+    [
+        ("git clone https://github.com/o/r /w", False),
+        ("cd /w && git status && cat datekit/parse.py | head -40", False),
+        ("cd /w && python -m pytest -rA", True),
+        ("cd /w && pip install -e .", True),
+        ("cd /w && make test", True),
+        ("cd /w && ls && python setup.py develop", True),
+    ],
+)
+def test_runs_repo_code(cmd, runs):
+    assert E.runs_repo_code(cmd) is runs
+
+
+def test_install_step_is_escalated_before_pytest(tmp_path):
+    eng, _posts = make(tmp_path)
+    FakeGH.state["runs"] = []
+    eng.start_watch("o/r", "main")
+    eng.tick()
+    FakeGH.state["runs"] = [red_run()]
+    eng.tick()
+    assert eng.wants_fix("fix")
+    eng.fix_context()
+    wt = eng.incident.worktree
+    assert eng.needs_approval("terminal", {"command": f"git clone https://github.com/o/r {wt}"}) is None
+    assert eng.needs_approval("terminal", {"command": f"cd {wt} && pip install -e ."}) == "approve"
+
+
+def test_snapshot_skips_gitignored_untracked_files(tmp_path):
+    root = tmp_path / "w"
+    (root / "pkg").mkdir(parents=True)
+    (root / ".gitignore").write_text("*.log\n/out/\ncoverage.xml\n")
+    (root / "pkg" / "mod.py").write_text("x = 1\n")
+    (root / "pkg" / "new.py").write_text("y = 2\n")
+    (root / "pkg" / "debug.log").write_text("noise\n")
+    (root / "out").mkdir()
+    (root / "out" / "a.txt").write_text("gen\n")
+    (root / "coverage.xml").write_text("<x/>\n")
+    (root / "kept.log").write_text("tracked\n")
+    snap = E.blob_snapshot(str(root), {"kept.log": "abc"})
+    assert set(snap) == {".gitignore", "pkg/mod.py", "pkg/new.py", "kept.log"}

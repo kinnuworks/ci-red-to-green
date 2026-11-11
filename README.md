@@ -6,7 +6,7 @@
 
 When your GitHub Actions run goes red, Hermes messages you in chat. Reply `fix` and Hermes reproduces the failure, fixes it, and offers a pull request only after its own pytest output shows the failing test failed before the change and passed three times after it. The PR contains source files only, so GitHub runs your original tests against the fix.
 
-It needs Hermes because the proof comes from Hermes's own terminal results, the first test run goes through Hermes's approval prompt, and the alert, the reply and the Open PR button all happen in the chat you already use.
+It needs Hermes because the proof comes from Hermes's own terminal results, the first command that runs your repo's code goes through Hermes's approval prompt, and the alert, the reply and the Open PR button all happen in the chat you already use.
 
 Site, with a live simulator of the gate: https://kinnuworks.github.io/ci-red-to-green/
 A real run, in public: [this PR](https://github.com/kinnuworks/datekit-demo/pull/1) was opened by the plugin after CI went red on three tests. Its body has the before and after table, it holds one source file, and GitHub's check on it passed.
@@ -31,6 +31,7 @@ Needs Hermes 0.23.1 or newer and a Python repo tested with pytest.
 | The fix really works | `PASSED <test id>` three runs in a row after the change |
 | Nothing else broke | the full suite run before and after: no test that passed before fails after |
 | Tests weren't touched | test files, `conftest.py`, pytest/tox/setup config and `.github` are never put in the PR commit; a fix that edits them is refused |
+| Only your source goes in | the commit is built from files changed since the red commit; files matched by your `.gitignore` (logs, coverage, build output) are left out unless the repo tracks them |
 | Only real runs count | the command must invoke pytest, and the output must carry pytest's session header and closing summary; echoed text is ignored |
 | GitHub agrees | after you open the PR, it follows the PR's own CI run and tells you when it's green |
 
@@ -57,7 +58,7 @@ Turn it on in **Capabilities → Plugins → CI red to green → Desktop**. It u
 ## What it does on your machine and the network
 
 - **GitHub API:** polls Actions runs for the watched repo every 30 seconds, downloads failed job logs, and (only when you tap Open PR) creates a branch, a commit and a pull request. Uses only `CI_RED_TO_GREEN_GITHUB_TOKEN`. Job logs are downloaded from GitHub's signed log URL without forwarding the token.
-- **Shell commands:** the plugin runs none itself. The agent clones the repo into the plugin's data folder and runs pytest through Hermes's terminal tool; the first test run is sent to Hermes's approval prompt, and `git push` from the fix folder is blocked.
+- **Shell commands:** the plugin runs none itself. The agent clones the repo into the plugin's data folder and runs pytest through Hermes's terminal tool. The first command in the fix folder that runs the repo's code (pytest, an install, `python`, `make`) is sent to Hermes's approval prompt; read-only steps such as `git clone`, `git diff` or `cat` are not, and `git push` from the fix folder is blocked.
 - **Stored data:** watch settings, the current incident and the recorded test results live in `plugin-data/ci-red-to-green/` under your Hermes home, plus the cloned repo in `plugin-data/ci-red-to-green/worktrees/`.
 - **Background thread:** one polling thread while a watch is on. It stops with `/ci stop` or when Hermes restarts; any `/ci` command in that chat starts it again.
 - No telemetry.
