@@ -126,6 +126,9 @@ class Engine:
     # ---- watching ---------------------------------------------------------------
     def start_watch(self, repo: str, branch: str) -> str:
         with self._lock:
+            old = self.watch
+            if self.incident and old and (old.repo, old.branch) != (repo, branch) and self.incident.status in ("alerted", "fixing", "ready", "ci_red"):
+                self.incident.status = "discarded"  # an open incident belongs to the old watch
             self.watch = Watch(repo=repo, branch=branch)
             gh = self.gh()
             # Everything already finished counts as seen; only new red runs alert.

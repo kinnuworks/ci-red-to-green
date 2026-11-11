@@ -172,3 +172,17 @@ def test_unreproducible_failure_says_so(tmp_path):
     finally:
         del FakeGH.job_log
     assert "couldn't find a failing pytest test" in posts[-1] and eng.incident is None
+
+
+def test_switching_repo_sets_aside_the_open_incident(tmp_path):
+    eng, posts = make(tmp_path)
+    eng.start_watch("o/r", "main")
+    FakeGH.state["runs"] = [red_run()]
+    eng.tick()
+    assert eng.incident.status == "alerted"
+    FakeGH.state["runs"] = []
+    eng.start_watch("o/other", "main")
+    assert eng.incident.status == "discarded"
+    FakeGH.state["runs"] = [red_run(7)]
+    eng.tick()
+    assert eng.incident.status == "alerted" and eng.incident.run_number == 7
