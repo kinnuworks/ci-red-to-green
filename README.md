@@ -44,6 +44,7 @@ Needs Hermes 0.23.1 or newer, and a repo whose Actions run pytest or `go test`.
 | Only your source goes in | the commit holds files changed since the red commit; files your `.gitignore` files match (nested ones and `!` lines included) stay out unless the repo tracks them |
 | Only real runs count | the terminal call must be the test command itself (`pytest`, `python -m pytest`, `uv run`/`poetry run`/`hatch run`/`pipenv run pytest`, or `go test`) (only `cd`, `source` or variables before it, nothing after it, no pipes), only lines between the runner's own header and summary are read, and Go's cached results are ignored |
 | No test edits, even temporary | a run made while a test file or test config is edited never counts, even if the edit is undone later |
+| A reviewer can rerun it | the PR description lists every recorded run with its exact test command and result (before the fix, at the last green commit, after it, full suite), local paths removed. The failing tests are the repo's own and stay in the suite, so the same bug coming back fails CI again |
 | GitHub agrees | after you open the PR, it waits for every workflow on it and tells you when they are all green |
 
 The alert also names the commits that came in since the last green run, and the proof card shows the diff, so you can review the change before you tap Open PR. The plugin never pushes to your base branch and never merges.

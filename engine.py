@@ -26,6 +26,15 @@ from .github import GitHub, GitHubError
 POLL_SECONDS = 30
 
 
+
+def _public_cmd(cmd: str, worktree: str) -> str:
+    """The test command itself, with the clone's path and the home folder taken out."""
+    c = runners._last_part(cmd)
+    if worktree:
+        c = c.replace(worktree.rstrip("/") + "/", "").replace(worktree.rstrip("/"), ".")
+    return re.sub(r"/(?:Users|home)/[^/\s]+", "~", c)
+
+
 def _state_of(src: dict[str, str], snap: dict[str, str]) -> str:
     """A short hash of the source changes in the fix folder: which files changed and their content."""
     key = "\n".join(f"{p} {snap.get(p, 'deleted')}" for p in sorted(src))
@@ -573,6 +582,7 @@ class Engine:
             if run is None:
                 continue
             run.full_suite = rn.is_full(cmd)
+            run.cmd = _public_cmd(cmd, inc.worktree)
             inc.runs.append(asdict(run))
         if inc.ledger().verdict(_state_of(src, snap) if src else None, need_green=bool(inc.anchor_blobs))[0]:
             inc.status = "ready"
@@ -662,8 +672,33 @@ class Engine:
             "| test |" + green_col + " before the fix | after the fix |\n|---|" + ("---|" if anchored else "") + "---|---|\n" + rows + "\n\n"
             + sus +
             f"Full suite: {p['suite']}. Test files untouched: this commit contains source files only, so CI here runs the original tests.\n\n"
+            "The failing tests above are this repo's own and stay in the suite, so the same bug turning up again fails CI again.\n\n"
+            + self._repro_section(p) +
             "Opened with ci-red-to-green for Hermes Agent. It never pushes to the base branch and never merges."
         )
+
+    def _repro_section(self, p: dict) -> str:
+        """Every recorded run, with the command and the result of each failing test, so a reviewer can rerun the proof."""
+        inc = self.incident
+        lines = []
+        for r in inc.runs:
+            if not r.get("cmd"):
+                continue
+            stage = ("at the last green commit (changed files restored)" if r.get("anchor")
+                     else "after the fix" if r.get("changed") else "before the fix")
+            if r.get("full_suite"):
+                res = r.get("results", {})
+                n = {k: sum(1 for v in res.values() if v == k) for k in ("PASSED", "FAILED", "ERROR", "SKIPPED")}
+                outcome = "full suite: " + ", ".join(f"{v} {k.lower()}" for k, v in n.items() if v)
+            else:
+                outcome = ", ".join(f"{t.split('::')[-1]} {r.get('results', {}).get(t, 'not run')}" for t in inc.test_ids)
+            st = f" · source state {r['state'][:8]}" if r.get("state") and r.get("changed") else ""
+            lines.append(f"- {stage}{st}: `{r['cmd']}` → {outcome}")
+        if not lines:
+            return ""
+        return ("<details><summary>Reproduce this proof (" + str(len(lines)) + " recorded runs)</summary>\n\n"
+                f"Run from a clone of {inc.head_sha[:7]}. \"Before the fix\" runs use the red commit as is; \"after the fix\" runs use this PR's change.\n\n"
+                + "\n".join(lines) + "\n\n</details>\n\n")
 
     def open_pr(self) -> str:
         inc = self.incident

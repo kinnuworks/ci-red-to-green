@@ -67,6 +67,7 @@ class Run:
     full_suite: bool
     anchor: bool = False  # ran with the source files restored to the last green commit
     state: str = ""  # hash of the source changes the run saw; the proof must match the code that ships
+    cmd: str = ""  # the test command as run, with local paths removed, so a reviewer can rerun it
 
 
 @dataclass

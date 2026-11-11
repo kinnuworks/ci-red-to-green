@@ -511,7 +511,12 @@ def test_three_point_proof_green_red_green(tmp_path):
     p = eng.proof()
     assert p["tests"][T]["passes_after"] == 4 and p["accepted"], p["reasons"]
     assert "PASSED at last green bbbbbbb" in eng.card_text()
-    assert "at the last green commit (bbbbbbb)" in eng.pr_body()
+    body = eng.pr_body()
+    assert "at the last green commit (bbbbbbb)" in body
+    # every recorded run is listed with its command, so a reviewer can rerun the proof
+    assert "Reproduce this proof" in body and "before the fix: `python -m pytest -rA " + T + "`" in body
+    assert "at the last green commit (changed files restored)" in body and "after the fix" in body
+    assert "full suite:" in body and "/Users/" not in body and eng.incident.worktree not in body
 
 
 def test_read_only_token_gets_the_proven_patch(tmp_path, monkeypatch):
@@ -625,3 +630,10 @@ def test_a_lost_token_stops_only_that_repo(tmp_path):
     finally:
         FakeGH.runs = orig
     assert [w.repo for w in eng.watches] == ["o/r"] and "Stopped watching o/gone" in posts[-1]
+
+
+def test_recorded_commands_drop_local_paths():
+    wt = "/Users/someone/.hermes/plugin-data/ci-red-to-green/worktrees/42"
+    cmd = f"cd {wt} && source .venv/bin/activate && {wt}/.venv/bin/python -m pytest -rA tests/a.py::t"
+    assert E._public_cmd(cmd, wt) == ".venv/bin/python -m pytest -rA tests/a.py::t"
+    assert E._public_cmd("/home/bob/tools/pytest -rA", "") == "~/tools/pytest -rA"
