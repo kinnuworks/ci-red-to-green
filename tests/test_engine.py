@@ -391,7 +391,7 @@ def test_demo_runs_the_whole_loop_without_github(tmp_path):
     assert eng.incident.status == "ready", eng.proof()["reasons"]
     out = eng.open_pr()
     assert "patch" in out and eng.incident.status == "done"
-    patch = Path(eng.incident.pr_url).read_text()
+    patch = Path(eng.incident.pr_url).read_text(encoding="utf-8")
     assert "+++ b/humanize_mini/filesize.py" in patch and "+        exp += 1" in patch
     assert "tests/" not in patch
     assert demo.SAMPLE.joinpath("humanize_mini/filesize.py").read_text().count("exp += 1") == 0  # sample untouched
@@ -538,7 +538,7 @@ def test_read_only_token_gets_the_proven_patch(tmp_path, monkeypatch):
     suite(eng, [T], False)
     out = eng.open_pr()
     assert "can't push" in out and "git apply" in out and eng.incident.status == "done"
-    patch = Path(eng.incident.pr_url).read_text()
+    patch = Path(eng.incident.pr_url).read_text(encoding="utf-8")
     assert "+++ b/src/dates.py" in patch and "FAILED 2/2" in patch and "tests/" not in patch.split("+++")[1]
 
 

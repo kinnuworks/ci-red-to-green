@@ -693,7 +693,7 @@ class Engine:
             else:
                 outcome = ", ".join(f"{t.split('::')[-1]} {r.get('results', {}).get(t, 'not run')}" for t in inc.test_ids)
             st = f" · source state {r['state'][:8]}" if r.get("state") and r.get("changed") else ""
-            lines.append(f"- {stage}{st}: `{r['cmd']}` → {outcome}")
+            lines.append(f"- {stage}{st}: `{r['cmd']}`: {outcome}")
         if not lines:
             return ""
         return ("<details><summary>Reproduce this proof (" + str(len(lines)) + " recorded runs)</summary>\n\n"
@@ -745,7 +745,7 @@ class Engine:
                                                (new or b"").decode("utf-8", "replace").splitlines(keepends=True),
                                                f"a/{path}", f"b/{path}"))
         out = self.data_dir / f"fix-run-{inc.run_number}.patch"
-        out.write_text("".join(chunks))
+        out.write_text("".join(chunks), encoding="utf-8")
         return out
 
     def _follow_pr(self, gh: GitHub, inc: Incident) -> None:
