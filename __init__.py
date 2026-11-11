@@ -16,6 +16,7 @@ USAGE = (
     "/ci watch owner/repo [branch]  start watching a branch\n"
     "/ci                            show the fix proof and open the PR\n"
     "/ci status                     what I'm watching\n"
+    "/ci discard                    drop the current incident\n"
     "/ci stop                       stop watching"
 )
 
@@ -52,6 +53,8 @@ def register(ctx):
             # The watcher thread dies with the gateway; any /ci in this chat re-arms it here.
             bound = contextvars.copy_context()
             engine.start_thread(runner=lambda fn: bound.run(fn))
+        if sub == "discard":
+            return engine.discard()
         if sub == "stop":
             engine.stop_thread()
             return "Stopped watching."
@@ -93,7 +96,7 @@ def register(ctx):
         except Exception:
             logger.exception("ci-red-to-green: could not record a test run")
 
-    ctx.register_command("ci", ci, description="Turn red CI into a proven fix PR", args_hint="[watch owner/repo [branch]|status|stop]")
+    ctx.register_command("ci", ci, description="Turn red CI into a proven fix PR", args_hint="[watch owner/repo [branch]|status|discard|stop]")
     ctx.register_hook("pre_llm_call", on_pre_llm_call)
     ctx.register_hook("pre_tool_call", on_pre_tool_call)
     ctx.register_hook("post_tool_call", on_post_tool_call)

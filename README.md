@@ -41,6 +41,7 @@ The plugin never pushes to your base branch and never merges.
 | `/ci watch owner/repo [branch]` | Start watching a branch (default `main`) |
 | `/ci` | Show the proof for the current fix, then Open PR or Discard |
 | `/ci status` | What's being watched, and the current incident |
+| `/ci discard` | Drop the current incident without opening a PR |
 | `/ci stop` | Stop watching |
 
 ## What it does on your machine and the network
