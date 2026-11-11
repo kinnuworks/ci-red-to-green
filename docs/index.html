@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ci-red-to-green</title>
-<meta name="description" content="A Hermes Agent plugin. When CI goes red, Hermes messages you. Reply fix, and you get a pull request only after pytest shows the failing test failed before the change and passed three times after it.">
+<meta name="description" content="A Hermes Agent plugin. When CI goes red, Hermes messages you. Reply fix, and you get a pull request only after the tests' own output shows each failing test failed twice before the change and passed three times after it. Try it with /ci demo, no token needed.">
 <link rel="icon" type="image/png" href="assets/favicon.png">
 <script>document.documentElement.classList.add('js')</script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -312,12 +312,12 @@ kbd{display:inline-grid;place-items:center;min-width:26px;height:26px;padding:0 
   <div class="container">
     <span class="badge"><span class="badge__tag">Plugin</span>For Hermes Agent 0.23.1 and later</span>
     <h1>Red CI in.<br><span class="t-muted">Proven fix out.</span></h1>
-    <p class="lead">When your GitHub Actions run goes red, Hermes messages you. Reply <span class="t-mono">fix</span> from your phone, and you get a pull request only after pytest shows the failing test failed before the change and passed three times after it.</p>
+    <p class="lead">When your GitHub Actions run goes red, Hermes tells you which test broke and which commit likely broke it. Reply <span class="t-mono">fix</span> from your phone or Hermes Desktop, and you get a pull request only after the tests' own output shows each failing test failed twice before the change and passed three times in a row after it.</p>
     <div class="cta-row">
       <a class="btn btn-halo btn-lg" href="#install">Install in Hermes</a>
-      <a class="btn btn-outline btn-lg" href="#proof">See what it checks</a>
+      <a class="btn btn-outline btn-lg" href="#real">Watch a real run</a>
     </div>
-    <p class="trust"><span><a href="https://github.com/kinnuworks/datekit-demo/pull/2" style="text-decoration:underline;text-underline-offset:3px">See a real fix PR it opened</a></span><span>Free and open source</span><span>Python repos tested with pytest</span><span>Never merges, never pushes to your base branch</span></p>
+    <p class="trust"><span><a href="https://github.com/kinnuworks/datekit-demo/pull/2" style="text-decoration:underline;text-underline-offset:3px">See a real fix PR it opened</a></span><span>Free and open source</span><span>pytest and go test</span><span>Try it with <span class="t-mono">/ci demo</span>, no token needed</span><span>Never merges, never pushes to your base branch</span></p>
 
     <div class="hero__visual bleed">
       <div class="stage hero-stage">
@@ -353,7 +353,22 @@ kbd{display:inline-grid;place-items:center;min-width:26px;height:26px;padding:0 
   </div>
 </header>
 
-<section class="section section--alt after-bleed" id="how">
+<section class="section after-bleed" id="real">
+  <div class="container stack">
+    <div class="section-head">
+      <span class="eyebrow"><span class="dot"></span>Real, not a mock-up</span>
+      <h2>A real run in Hermes Desktop.</h2>
+      <p class="lead">Below is <span class="t-mono">/ci demo</span> running for real: humanize's own bug from its PR #329 (<span class="t-mono">naturalsize(999999)</span> gave <span class="t-mono">1000.0 kB</span>), humanize's own tests, Hermes doing the fix, and the plugin's pane filling in from the actual pytest output. The film around it is animated; the middle is screen captures, sped up.</p>
+    </div>
+    <div class="window" style="max-width:980px;margin-inline:auto"><video src="assets/demo.mp4" poster="assets/demo-poster.jpg" controls playsinline preload="none" style="width:100%;display:block;background:#0b0c10"></video></div>
+    <div class="grid-2" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;max-width:980px;margin-inline:auto">
+      <figure style="margin:0"><div class="window"><img src="assets/real-approval.jpg" alt="Hermes Desktop asking to approve the first pytest run in the fix folder" loading="lazy" style="width:100%;display:block"></div><figcaption class="t-small" style="margin-top:8px">The first command that runs the repo's code goes to Hermes's approval prompt.</figcaption></figure>
+      <figure style="margin:0"><div class="window"><img src="assets/real-proven.jpg" alt="The CI red to green pane: each test FAILED twice before and PASSED three times after, the suite clean, and the diff" loading="lazy" style="width:100%;display:block"></div><figcaption class="t-small" style="margin-top:8px">Two red dots before, three green after, no new failures, and the diff, before you open the PR.</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section class="section section--alt" id="how">
   <div class="container">
     <div class="section-head">
       <span class="eyebrow"><span class="dot"></span>How it works</span>
@@ -525,13 +540,14 @@ tests/test_parse.py::test_add_months_negative <span class="f">FAILED</span><br>
     <div class="section-head">
       <span class="eyebrow"><span class="dot"></span>Install</span>
       <h2>Running in about two minutes.</h2>
-      <p class="lead">You need Hermes 0.23.1 or later, a chat platform connected to it, and a Python repo tested with pytest.</p>
+      <p class="lead">You need Hermes 0.23.1 or later. For your own repos, its GitHub Actions should run pytest or go test.</p>
     </div>
     <ol class="steps">
       <li><div><p class="t-title">Install the plugin</p><div class="code" style="margin-top:10px"><span>hermes plugins install ci-red-to-green --enable</span><button type="button" data-copy="hermes plugins install ci-red-to-green --enable">Copy</button></div></div></li>
+      <li><div><p class="t-title">Try the demo</p><p class="t-small">Send <span class="t-mono">/ci demo</span> in any chat with Hermes, or pick <b>CI red to green: Try the demo</b> from the Desktop palette, then reply <span class="t-mono">fix</span>. It runs on a bundled copy of a real humanize bug, with no token and no network.</p></div></li>
       <li><div><p class="t-title">Add a token</p><p class="t-small">Make a fine-grained GitHub token for one repo with Actions read, Contents read and write, and Pull requests read and write. Save it in Hermes as <span class="t-mono">CI_RED_TO_GREEN_GITHUB_TOKEN</span>.</p></div></li>
-      <li><div><p class="t-title">Start watching</p><p class="t-small">In your chat with Hermes, send <span class="t-mono">/ci watch owner/repo main</span>. The next red run on that branch sends you a message.</p></div></li>
-      <li><div><p class="t-title">Reply fix</p><p class="t-small">When Hermes says the fix is ready, send <span class="t-mono">/ci</span> and pick Open PR. On Telegram the buttons are numbered: tap 1.</p></div></li>
+      <li><div><p class="t-title">Start watching</p><p class="t-small">In your chat with Hermes, send <span class="t-mono">/ci watch owner/repo main</span>, or use the Watch field on the Desktop page. Add more repos the same way. The next red run sends you a message and a Desktop notification.</p></div></li>
+      <li><div><p class="t-title">Reply fix</p><p class="t-small">When the proof is complete, send <span class="t-mono">/ci</span> and pick Open PR (on Telegram the buttons are numbered: tap 1), or click Open PR in the Desktop pane.</p></div></li>
     </ol>
   </div>
 </section>
@@ -543,7 +559,7 @@ tests/test_parse.py::test_add_months_negative <span class="f">FAILED</span><br>
       <details><summary>Why does this need Hermes instead of a script or a prompt?</summary><p>The proof comes from Hermes's own terminal results, read through its hooks while the agent works, and the first run of your code goes through Hermes's approval prompt. The alert, the reply and the Open PR button live in the chat you already use with Hermes. A prompt can ask a model to say the tests pass; it can't check the model's runs or keep test edits out of the PR.</p></details>
       <details><summary>What if the agent edits the test to make it pass?</summary><p>The commit is built from source files only, so a test edit never reaches GitHub. The plugin also sees the changed test file and refuses the fix, and the card says which file it was.</p></details>
       <details><summary>Does it merge anything?</summary><p>No. It opens a pull request on a new branch after you tap Open PR, then reports GitHub's result. Merging stays with you.</p></details>
-      <details><summary>Which repos and platforms does it support?</summary><p>Python repos tested with pytest, on GitHub Actions. It has been tested end to end on Telegram. Other chat platforms get the alert as plain text, and the Open PR choice follows Hermes's picker on each one.</p></details>
+      <details><summary>Which repos and platforms does it support?</summary><p>Repos whose GitHub Actions run pytest or go test. It has been tested end to end on Telegram and Hermes Desktop. Other chat platforms get the alert as plain text, and the Open PR choice follows Hermes's picker on each one.</p></details>
       <details><summary>What can't it fix?</summary><p>Failures that need secrets, services or an operating system that only exist in CI can't be reproduced on your machine, and the plugin says so. Flaky tests can still pass three runs in a row. Fixes that really need a test change are refused, so you make those by hand.</p></details>
       <details><summary>What runs on my machine?</summary><p>The agent clones the repo into the plugin's data folder and runs pytest through Hermes's terminal tool. The plugin itself runs no shell commands. One background thread polls GitHub while a watch is on.</p></details>
     </div>
