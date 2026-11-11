@@ -214,3 +214,19 @@ def test_fake_output_is_ignored(tmp_path):
         term(eng, "python -m pytest -rA " + T, f"PASSED {T}\n", 0, raw=True)
     assert eng.incident.ledger().passes_after(T) == 0
     assert not eng.proof()["accepted"]
+
+
+def test_snapshot_for_desktop(tmp_path):
+    eng, _ = make(tmp_path)
+    assert eng.snapshot()["watch"] is None
+    eng.start_watch("o/r", "main")
+    FakeGH.state["runs"] = [red_run()]
+    eng.tick()
+    s = eng.snapshot()
+    assert s["watch"] == {"repo": "o/r", "branch": "main"}
+    assert s["incident"]["status"] == "alerted" and s["incident"]["tests"] == [T] and s["incident"]["proof"] is None
+    eng.fix_context()
+    s = eng.snapshot()
+    assert s["incident"]["proof"]["needed"] == 3 and s["incident"]["proof"]["accepted"] is False
+    eng.discard()
+    assert eng.snapshot()["incident"] is None

@@ -36,6 +36,14 @@ Needs Hermes 0.23.1 or newer and a Python repo tested with pytest.
 
 The plugin never pushes to your base branch and never merges.
 
+## In Hermes Desktop
+
+The package also ships a Desktop half: a **CI red to green** pane and a status-bar chip. The pane shows the same proof as the chat card, live, while Hermes works: each failing test, its FAILED-before mark, the three passing runs filling in, the suite and test-file checks. When the proof is complete, **Open PR** opens the pull request right there, and the pane follows GitHub's check until it is green.
+
+<img src="docs/assets/desktop-pane-ready.png" alt="The pane with a proven fix and the Open PR button" width="300"> <img src="docs/assets/desktop-pane-done.png" alt="The pane after GitHub's check passed" width="300">
+
+Turn it on in **Capabilities → Plugins → CI red to green → Desktop**. It uses only the Desktop plugin SDK and the plugin's own backend routes.
+
 ## Commands
 
 | Command | What it does |

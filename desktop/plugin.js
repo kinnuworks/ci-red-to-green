@@ -120,8 +120,8 @@ function Pane({ ctx }) {
     style: { display: 'flex', alignItems: 'center', gap: 8 },
     children: [
       jsx(StatusDot, { status: !inc ? (s.watching ? 'ok' : 'idle') : inc.status === 'done' ? 'ok' : inc.status === 'pr_open' || inc.status === 'fixing' ? 'busy' : 'error' }),
-      jsx('div', { style: { fontWeight: 600 }, children: 'CI red to green' }),
-      jsx('div', { style: { marginLeft: 'auto', color: MUTED, ...mono }, children: s.watch ? `${s.watch.repo} @ ${s.watch.branch}` : 'not watching' })
+      jsx('div', { style: { fontWeight: 600, whiteSpace: 'nowrap' }, children: 'CI red to green' }),
+      jsx('div', { style: { marginLeft: 'auto', color: MUTED, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...mono }, title: s.watch ? `${s.watch.repo} @ ${s.watch.branch}` : '', children: s.watch ? `${s.watch.repo} @ ${s.watch.branch}` : 'not watching' })
     ]
   })
   if (!s.watch) {
