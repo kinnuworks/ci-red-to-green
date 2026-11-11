@@ -166,11 +166,12 @@ def test_unreproducible_failure_says_so(tmp_path):
     eng, posts = make(tmp_path)
     eng.start_watch("o/r", "main")
     FakeGH.state["runs"] = [red_run()]
+    original = FakeGH.job_log
     FakeGH.job_log = lambda self, j: "npm ERR! build failed\n"
     try:
         eng.tick()
     finally:
-        del FakeGH.job_log
+        FakeGH.job_log = original
     assert "couldn't find a failing pytest test" in posts[-1] and eng.incident is None
 
 
