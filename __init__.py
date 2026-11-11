@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import contextvars
 import logging
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +116,29 @@ def register(ctx):
         except Exception:
             logger.exception("ci-red-to-green: could not record a test run")
 
+    skill = Path(__file__).parent / "skills" / "fix-red-ci" / "SKILL.md"
+    if skill.exists():
+        ctx.register_skill("fix-red-ci", skill)
+    ctx.register_automation_blueprint(
+        "morning-ci",
+        title="Morning CI check",
+        description="Every weekday, check a repo's GitHub Actions on one branch and report anything red that has no fix PR yet.",
+        category="work",
+        schedule_template="{minute} {hour} * * 1-5",
+        prompt_template=(
+            "Look at the GitHub Actions runs on {branch} of {repo} from the last 24 hours. "
+            "List each red run with its failing pytest tests, and say whether an open pull request "
+            "from a ci-fix/ branch already addresses it. If anything is red and unfixed, say so first "
+            "and suggest sending /ci watch {repo} {branch} so ci-red-to-green can prove a fix."
+        ),
+        slots=[
+            {"name": "repo", "type": "text", "label": "Which repo (owner/name)?", "default": "owner/repo"},
+            {"name": "branch", "type": "text", "label": "Which branch?", "default": "main"},
+            {"name": "time", "type": "time", "label": "What time?", "default": "08:30"},
+        ],
+        skills=["ci-red-to-green:fix-red-ci"],
+        tags=["ci", "github", "daily"],
+    )
     ctx.register_command("ci", ci, description="Turn red CI into a proven fix PR", args_hint="[demo|watch owner/repo [branch]|status|discard|stop]")
     ctx.register_hook("pre_llm_call", on_pre_llm_call)
     ctx.register_hook("pre_tool_call", on_pre_tool_call)

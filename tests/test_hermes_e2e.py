@@ -29,8 +29,11 @@ import json, os, re, subprocess, sys
 from hermes_cli.plugins import discover_plugins, get_plugin_command_handler, invoke_hook, get_pre_tool_call_directive
 
 discover_plugins()
+from hermes_cli.plugins import get_plugin_manager
+_pm = get_plugin_manager()
 ci = get_plugin_command_handler("ci")
-out = {"demo": ci("demo")}
+out = {"skills": sorted(str(k) for k in _pm._plugin_skills), "blueprints": sorted(str(k) for k in _pm._automation_blueprints)}
+out["demo"] = ci("demo")
 ctx = [r for r in invoke_hook("pre_llm_call", user_message="fix", session_id="s", conversation_history=[]) if r]
 out["context"] = ctx[0]["context"] if ctx else ""
 wt = re.search(r"in (\S+/worktrees/\d+)", out["context"]).group(1)
@@ -81,6 +84,8 @@ def test_demo_through_the_real_plugin_manager(tmp_path):
     line = next((ln[ln.index("RESULT "):] for ln in (p.stdout + "\n" + p.stderr).splitlines() if "RESULT {" in ln), None)
     assert line, py + "\n" + p.stdout[-2000:] + p.stderr[:2500]
     out = json.loads(line[len("RESULT "):])
+    assert "ci-red-to-green:fix-red-ci" in out["skills"]
+    assert "ci-red-to-green:morning-ci" in out["blueprints"]
     assert "PR #329" in out["demo"]
     assert "Reproduce BEFORE changing anything" in out["context"]
     assert out["clone_directive"] is None
