@@ -1,6 +1,6 @@
-# Eval: seven real humanize regressions
+# Eval: eight real humanize regressions
 
-To see ci-red-to-green work on a real project instead of a toy repo, I replayed seven real bugs from [humanize](https://github.com/python-humanize/humanize) on a fork, [kinnuworks/humanize](https://github.com/kinnuworks/humanize), one after another. Each bug is one that humanize itself fixed in a past pull request. Its test suite has 878 tests.
+To see ci-red-to-green work on a real project instead of a toy repo, I replayed eight real bugs from [humanize](https://github.com/python-humanize/humanize) on a fork, [kinnuworks/humanize](https://github.com/kinnuworks/humanize), one after another. Each bug is one that humanize itself fixed in a past pull request. Its test suite has 878 tests.
 
 ## How each replay ran
 
@@ -21,6 +21,7 @@ To see ci-red-to-green work on a real project instead of a toy repo, I replayed 
 | 5 | [#295](https://github.com/python-humanize/humanize/pull/295) `naturaldelta` truncates years | 2 | same | [PR #5](https://github.com/kinnuworks/humanize/pull/5) | `src/humanize/time.py` | green | 6 min |
 | 6 | [#392](https://github.com/python-humanize/humanize/pull/392) `intcomma` overflow on big ints | 2 | same | [PR #6](https://github.com/kinnuworks/humanize/pull/6) | `src/humanize/number.py` | green | 4.5 min |
 | 7 | [#297](https://github.com/python-humanize/humanize/pull/297) tz-aware `naturalday`/`naturaldate` (clean replay, below) | 1 | same | [PR #7](https://github.com/kinnuworks/humanize/pull/7) | `src/humanize/time.py` | green | 16 min |
+| 8 | [#26](https://github.com/python-humanize/humanize/commit/11e62ee) `naturalsize` prints float bytes below 1 kB (clean replay on 0.2.3, below) | 11 | same | [PR #8](https://github.com/kinnuworks/humanize/pull/8) | `src/humanize/filesize.py` | green | 8.5 min |
 
 ## A clean replay on the submitted version
 
@@ -35,9 +36,15 @@ The agent's fix is not a copy of the original: it adds a small `_today_for(value
 
 This replay also caught a bug in the plugin. 0.2.2 had started counting a test that passed before the fix but was missing from the full-suite run after it as a regression. Hermes shortens long terminal output, so a full-suite run of 878 tests records only part of its per-test lines, and the gate wrongly said "new failures". 0.2.3 counts only tests that are reported failed, errored or skipped after the fix. The gate then said ready, and the PR was opened from the same recorded runs.
 
+### Replay 8: start to finish on 0.2.3
+
+Replay 7 found the bug and finished on 0.2.3, so one more clean replay ran entirely on 0.2.3, the version in the catalog PR. Same setup: a new history-free branch, `clean-replay-8`, green first; then a red commit titled "Tidy byte formatting in naturalsize" that undoes humanize's fix for sizes below 1 kB (`naturalsize(1.123456789)` gives `1.123456789B`, and the translated "%d Bytes" strings stop matching). 11 tests failed, including the French, Persian, Sinhala and Bengali ones.
+
+The agent restored whole-number formatting in one file, with a comment on why the translation catalogs need `%d`. The card: each of the 11 tests passed at the last green commit, failed 2/2 before the fix, passed 3/3 after; the full suite went from 11 failed, 867 passed to 878 passed. [PR #8](https://github.com/kinnuworks/humanize/pull/8) passed every Python version of humanize's CI, 8.5 minutes after the red run ended. No plugin change was needed.
+
 ## Summary
 
-7 of 7 replays ended in a proven PR that changed one source file and went green on humanize's own CI. None touched a test.
+8 of 8 replays ended in a proven PR that changed one source file and went green on humanize's own CI. None touched a test.
 
 "Red CI to green PR" runs from the end of the red CI run to the end of the PR's CI run, and includes the human steps (reply `fix`, approve, `/ci`, Open PR).
 
