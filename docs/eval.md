@@ -1,6 +1,6 @@
-# Eval: six real humanize regressions
+# Eval: seven real humanize regressions
 
-To see ci-red-to-green work on a real project instead of a toy repo, I replayed six real bugs from [humanize](https://github.com/python-humanize/humanize) on a fork, [kinnuworks/humanize](https://github.com/kinnuworks/humanize), one after another. Each bug is one that humanize itself fixed in a past pull request. Its test suite has 878 tests.
+To see ci-red-to-green work on a real project instead of a toy repo, I replayed seven real bugs from [humanize](https://github.com/python-humanize/humanize) on a fork, [kinnuworks/humanize](https://github.com/kinnuworks/humanize), one after another. Each bug is one that humanize itself fixed in a past pull request. Its test suite has 878 tests.
 
 ## How each replay ran
 
@@ -20,8 +20,24 @@ To see ci-red-to-green work on a real project instead of a toy repo, I replayed 
 | 4 | [#354](https://github.com/python-humanize/humanize/pull/354) `fractional` rounds to a whole | 5 | same | [PR #4](https://github.com/kinnuworks/humanize/pull/4) | `src/humanize/number.py` | green | 6 min |
 | 5 | [#295](https://github.com/python-humanize/humanize/pull/295) `naturaldelta` truncates years | 2 | same | [PR #5](https://github.com/kinnuworks/humanize/pull/5) | `src/humanize/time.py` | green | 6 min |
 | 6 | [#392](https://github.com/python-humanize/humanize/pull/392) `intcomma` overflow on big ints | 2 | same | [PR #6](https://github.com/kinnuworks/humanize/pull/6) | `src/humanize/number.py` | green | 4.5 min |
+| 7 | [#297](https://github.com/python-humanize/humanize/pull/297) tz-aware `naturalday`/`naturaldate` (clean replay, below) | 1 | same | [PR #7](https://github.com/kinnuworks/humanize/pull/7) | `src/humanize/time.py` | green | 16 min |
 
-6 of 6 replays ended in a proven PR that changed one source file and went green on humanize's own CI. None touched a test.
+## A clean replay on the submitted version
+
+The six replays above have two weak points: humanize's original fixes sit in the fork's history, and each replay commit's title names the bug. So a seventh replay ran with both removed, on the final plugin version:
+
+- A new branch, `clean-replay`, starts from a single commit holding humanize's current source, with no history. Its CI ran green first.
+- The red commit reverts humanize's [#297](https://github.com/python-humanize/humanize/pull/297) (`naturalday` and `naturaldate` compare tz-aware datetimes against the machine's local date) under a plain title: "Simplify date handling in naturalday and naturaldate".
+- The plugin's alert named `test_naturaldate_tz_aware` and that commit. After `fix`, the agent confirmed the test passed at the last green commit, failed twice on the red one, and passed three times after its fix; the full suite went from 1 failed, 877 passed to 878 passed.
+- [PR #7](https://github.com/kinnuworks/humanize/pull/7) changes only `src/humanize/time.py` and passed all 9 Python versions of humanize's CI. Red CI to green PR: 16 minutes.
+
+The agent's fix is not a copy of the original: it adds a small `_today_for(value)` helper that both functions call. The clone still contains the fork's other branches, so the original fix was reachable if the agent had gone looking.
+
+This replay also caught a bug in the plugin. 0.2.2 had started counting a test that passed before the fix but was missing from the full-suite run after it as a regression. Hermes shortens long terminal output, so a full-suite run of 878 tests records only part of its per-test lines, and the gate wrongly said "new failures". 0.2.3 counts only tests that are reported failed, errored or skipped after the fix. The gate then said ready, and the PR was opened from the same recorded runs.
+
+## Summary
+
+7 of 7 replays ended in a proven PR that changed one source file and went green on humanize's own CI. None touched a test.
 
 "Red CI to green PR" runs from the end of the red CI run to the end of the PR's CI run, and includes the human steps (reply `fix`, approve, `/ci`, Open PR).
 
