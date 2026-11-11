@@ -74,11 +74,20 @@ class Pytest:
         if "pytest" not in words:
             return False
         after = words[words.index("pytest") + 1:]
-        takes_value = {"-p", "-c", "-o", "--rootdir", "--confcutdir", "--basetemp", "-W", "--maxfail", "-n", "--tb", "-r"}
+        # Options that change which tests run, which plugins load or which config applies make a
+        # run not a full suite. Output-only options are fine.
+        narrowing = {"-k", "-m", "--deselect", "--lf", "--last-failed", "--ff", "--failed-first", "-x", "--exitfirst",
+                     "--maxfail", "--sw", "--stepwise", "--co", "--collect-only", "-p", "-c", "-o", "--override-ini",
+                     "--rootdir", "--confcutdir", "--ignore", "--ignore-glob", "--pyargs", "--noconftest", "--config-file"}
+        takes_value = {"--basetemp", "-W", "-n", "--tb", "-r", "--durations", "--color", "--capture"}
         i = 0
         while i < len(after):
             a = after[i]
-            if a in ("-k", "-m", "--deselect", "--lf", "--last-failed", "--ff", "-x", "--exitfirst") or a.startswith(("-k", "-m")) and len(a) > 2 and not a.startswith("-m" + "pytest"):
+            if a == "-p" and i + 1 < len(after) and after[i + 1] == "no:cacheprovider" or a == "-pno:cacheprovider":
+                i += 2 if a == "-p" else 1
+                continue
+            name = a.split("=", 1)[0]
+            if name in narrowing or (a[:2] in ("-k", "-m", "-p", "-c", "-o") and len(a) > 2 and not a.startswith("--")):
                 return False
             if a in takes_value:
                 i += 2

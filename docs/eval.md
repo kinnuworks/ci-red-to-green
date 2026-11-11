@@ -40,7 +40,7 @@ This replay also caught a bug in the plugin. 0.2.2 had started counting a test t
 
 Replay 7 found the bug and finished on 0.2.3, so one more clean replay ran entirely on 0.2.3, the version in the catalog PR. Same setup: a new history-free branch, `clean-replay-8`, green first; then a red commit titled "Tidy byte formatting in naturalsize" that undoes humanize's fix for sizes below 1 kB (`naturalsize(1.123456789)` gives `1.123456789B`, and the translated "%d Bytes" strings stop matching). 11 tests failed, including the French, Persian, Sinhala and Bengali ones.
 
-The agent restored whole-number formatting in one file, with a comment on why the translation catalogs need `%d`. The card: each of the 11 tests passed at the last green commit, failed 2/2 before the fix, passed 3/3 after; the full suite went from 11 failed, 867 passed to 878 passed. [PR #8](https://github.com/kinnuworks/humanize/pull/8) passed every Python version of humanize's CI, 8.5 minutes after the red run ended. No plugin change was needed.
+The agent restored whole-number formatting in one file, with a comment on why the translation catalogs need `%d`. The card: each of the 11 tests passed at the last green commit, failed 2/2 before the fix, passed 3/3 after; the full suite went from 11 failed, 867 passed to 878 passed. [PR #8](https://github.com/kinnuworks/humanize/pull/8) passed every Python version of humanize's CI, 8.5 minutes after the red run the plugin alerted on. That was a second run of the red commit: the first one finished before I started the watch, and the plugin only alerts on runs that finish while it watches. Counted from the first red run, it took about 16 minutes. No plugin change was needed.
 
 ## Summary
 

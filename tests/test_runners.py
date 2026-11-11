@@ -99,3 +99,11 @@ def test_wrapped_pytest_commands_count():
     for c in ("uv run pytest -rA", "cd /w && uv run --frozen pytest -rA tests/a.py::t", "poetry run pytest -rA", "hatch run python -m pytest -rA"):
         assert py.is_cmd(c), c
     assert not py.is_cmd("uv run python -c 'print(1)'")
+
+
+def test_options_that_narrow_or_reconfigure_the_run_are_not_a_full_suite():
+    py = runners.get("pytest")
+    assert py.is_full("python -m pytest -rA") and py.is_full("python -m pytest -rA -n 4 --tb=short -W error")
+    for c in ("pytest -rA -p myplugin", "pytest -rA -c other.ini", "pytest -rA -o addopts=", "pytest -rA --ignore=tests/a.py",
+              "pytest -rA --lf", "pytest -rA --maxfail=1", "pytest -rA --deselect=tests/a.py::t", "pytest -rA -pno:x", "pytest -rA --co"):
+        assert not py.is_full(c), c
