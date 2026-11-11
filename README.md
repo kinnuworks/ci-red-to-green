@@ -1,12 +1,14 @@
 # ci-red-to-green
 
+![ci-red-to-green: a red CI run becomes a proven fix PR](docs/assets/banner.png)
+
 **Red CI in, proven fix out.**
 
 When your GitHub Actions run goes red, Hermes messages you in chat. Reply `fix` and Hermes reproduces the failure, fixes it, and offers a pull request only after its own pytest output shows the failing test failed before the change and passed three times after it. The PR contains source files only, so GitHub runs your original tests against the fix.
 
 It needs Hermes because the proof comes from Hermes's own terminal results, the first test run goes through Hermes's approval prompt, and the alert, the reply and the Open PR button all happen in the chat you already use.
 
-<!-- GIF of the core loop goes here -->
+Site: https://kinnuworks.github.io/ci-red-to-green/ · Demo repo with real fix PRs: https://github.com/kinnuworks/datekit-demo
 
 ## Try it in 30 seconds
 

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>ci-red-to-green banner</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400..600&family=Public+Sans:wght@400..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:1200px;height:600px;overflow:hidden}
+body{font-family:"Public Sans",system-ui,sans-serif;color:#fff;background:radial-gradient(120% 90% at 30% -10%,#5C78FF 0%,#3655EC 45%,#2338C9 100%);position:relative;display:grid;grid-template-columns:1fr 470px;align-items:center;gap:40px;padding:0 64px}
+body::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,rgba(255,255,255,.07) 0 1px,transparent 1px 80px),repeating-linear-gradient(0deg,rgba(255,255,255,.07) 0 1px,transparent 1px 80px);-webkit-mask:radial-gradient(70% 70% at 30% 40%,#000,transparent)}
+.l{position:relative}
+.brand{display:flex;align-items:center;gap:14px;font:600 22px/1 "Outfit";letter-spacing:-.02em;opacity:.95}
+.brand img{width:56px;height:56px;border-radius:13px;box-shadow:0 10px 30px -10px rgba(0,0,0,.5)}
+h1{margin:34px 0 0;font:500 76px/1 "Outfit";letter-spacing:-.03em}
+h1 span{color:rgba(255,255,255,.62)}
+p{margin:22px 0 0;max-width:520px;font-size:20px;line-height:1.45;color:rgba(255,255,255,.82)}
+.card{position:relative;background:#fff;color:#0E1116;border-radius:18px;box-shadow:0 40px 90px -30px rgba(10,20,80,.7),0 0 0 1px rgba(255,255,255,.4);overflow:hidden}
+.bar{height:38px;display:flex;align-items:center;gap:8px;padding:0 14px;background:linear-gradient(#FBFBFB,#F1F1F2);border-bottom:1px solid rgba(0,0,0,.08);font-size:12.5px;font-weight:600;color:#6E6E73}
+.bar i{width:12px;height:12px;border-radius:50%;background:#FF5F57}.bar i:nth-child(2){background:#FEBC2E}.bar i:nth-child(3){background:#28C840}
+.bar b{margin-left:auto;margin-right:auto;font-weight:600}
+.body{padding:8px 22px 22px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 0;border-top:1px solid #E4E6EE;font-size:14px}
+.row:first-child{border-top:0}
+.id{font:500 13px "JetBrains Mono",monospace;color:#3F4552}
+.t{display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:99px;font-size:12.5px;font-weight:650}
+.f{background:#FFEBE9;color:#A40E26}.p{background:#DAFBE1;color:#116329}
+.dots{display:inline-flex;gap:4px;margin-left:6px}.dots i{width:10px;height:10px;border-radius:50%;background:#2DA44E}
+.ok{display:flex;align-items:center;gap:10px;margin-top:10px;padding:12px;border-radius:12px;background:#DAFBE1;color:#116329;font-weight:650;font-size:14px}
+</style></head><body>
+<div class="l">
+  <div class="brand"><img src="assets/logo-256.png" alt="">ci-red-to-green · Hermes Agent plugin</div>
+  <h1>Red CI in.<br><span>Proven fix out.</span></h1>
+  <p>Reply fix from chat. A PR is offered only after pytest shows the failing test failed before and passed three times after.</p>
+</div>
+<div class="card">
+  <div class="bar"><i></i><i></i><i></i><b>/ci · run #6 on main</b></div>
+  <div class="body">
+    <div class="row"><span class="id">test_add_months_clamps…</span><span><span class="t f">FAILED before</span><span class="dots"><i></i><i></i><i></i></span></span></div>
+    <div class="row"><span class="id">test_add_months_across_year</span><span><span class="t f">FAILED before</span><span class="dots"><i></i><i></i><i></i></span></span></div>
+    <div class="row"><span>Full suite</span><span class="t p">no new failures</span></div>
+    <div class="row"><span>Test files</span><span class="t p">untouched</span></div>
+    <div class="ok">✓ GitHub's CI is green on the fix PR</div>
+  </div>
+</div>
+</body></html>
