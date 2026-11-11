@@ -72,7 +72,7 @@ def test_demo_through_the_real_plugin_manager(tmp_path):
     home = tmp_path / "home"
     (home / "plugins").mkdir(parents=True)
     shutil.copytree(PLUGIN, home / "plugins" / "ci-red-to-green",
-                    ignore=shutil.ignore_patterns(".git", ".venv", "__pycache__", "docs", ".pytest_cache"))
+                    ignore=shutil.ignore_patterns(".git", ".venv", "__pycache__", "docs", ".pytest_cache", "_hermes"))
     (home / "config.yaml").write_text("plugins:\n  enabled:\n    - ci-red-to-green\n")
     # HERMES_SITE: the site-packages Hermes runs with (`hermes --run-module site` prints it)
     paths = [AGENT] + ([os.environ["HERMES_SITE"]] if os.environ.get("HERMES_SITE") else [])

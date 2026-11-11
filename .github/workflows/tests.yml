@@ -33,3 +33,20 @@ jobs:
           cd demo/humanize_mini
           if python -m pytest -q; then echo "the demo sample should fail"; exit 1; fi
           python -m pytest -q 2>&1 | grep -q "4 failed, 13 passed"
+  hermes-e2e:
+    # Loads the plugin through Hermes's real plugin manager (Hermes v0.23.1) and drives its hooks through /ci demo.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: NousResearch/hermes-agent
+          ref: 3b421578588243f920886e6fe79a6faa87ea026e
+          path: _hermes
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -e ./_hermes "pytest>=8,<9"
+      - run: python -m pytest -q tests/test_hermes_e2e.py
+        env:
+          HERMES_AGENT_DIR: ${{ github.workspace }}/_hermes
