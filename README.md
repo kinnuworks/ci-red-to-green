@@ -30,6 +30,7 @@ Needs Hermes 0.23.1 or newer and a Python repo tested with pytest.
 | The fix really works | `PASSED <test id>` three runs in a row after the change |
 | Nothing else broke | the full suite run before and after: no test that passed before fails after |
 | Tests weren't touched | test files, `conftest.py`, pytest/tox/setup config and `.github` are never put in the PR commit; a fix that edits them is refused |
+| Only real runs count | the command must invoke pytest, and the output must carry pytest's session header and closing summary; echoed text is ignored |
 | GitHub agrees | after you open the PR, it follows the PR's own CI run and tells you when it's green |
 
 The plugin never pushes to your base branch and never merges.

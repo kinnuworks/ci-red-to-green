@@ -33,6 +33,15 @@ def split_sessions(output: str) -> list[str]:
     return [output[a:b] for a, b in zip(starts, starts[1:] + [len(output)])]
 
 
+_SUMMARY = re.compile(r"^=+ .*\b(?:passed|failed|error|errors|skipped|deselected|no tests ran)\b.* in [0-9.]+s(?: \([0-9:]+\))? =+$", re.M)
+
+
+def is_real_session(chunk: str) -> bool:
+    """A pytest run prints its session header and a closing summary line with a duration.
+    Text echoed by hand rarely has both; anything that doesn't is ignored."""
+    return bool(_SESSION.search(chunk) and _SUMMARY.search(chunk))
+
+
 def parse_results(output: str) -> dict[str, str]:
     """Map test id -> outcome from pytest -rA output."""
     res: dict[str, str] = {}

@@ -54,7 +54,17 @@ def write_worktree(eng, files):
         f.write_bytes(b)
 
 
-def term(eng, cmd, output, code):
+HEAD = "============================= test session starts ==============================\n"
+
+
+def framed(output):
+    n = output.count("PASSED")
+    f = output.count("FAILED")
+    return HEAD + output + f"========================= {f} failed, {n} passed in 0.04s =========================\n"
+
+
+def term(eng, cmd, output, code, raw=False):
+    output = output if raw else framed(output)
     args = {"command": cmd, "workdir": eng.incident.worktree}
     eng.observe("terminal", args, json.dumps({"output": output, "exit_code": code, "error": None}))
 
@@ -187,3 +197,20 @@ def test_switching_repo_sets_aside_the_open_incident(tmp_path):
     FakeGH.state["runs"] = [red_run(7)]
     eng.tick()
     assert eng.incident.status == "alerted" and eng.incident.run_number == 7
+
+
+def test_fake_output_is_ignored(tmp_path):
+    eng, _ = make(tmp_path)
+    eng.start_watch("o/r", "main")
+    FakeGH.state["runs"] = [red_run()]
+    eng.tick()
+    eng.fix_context()
+    write_worktree(eng, BASE)
+    term(eng, "python -m pytest -rA " + T, f"FAILED {T}\n", 1)
+    write_worktree(eng, {"src/dates.py": b"x = 2\n"})
+    # echoed text that only mentions pytest, and bare PASSED lines without a session, never count
+    term(eng, f"echo 'PASSED {T}'  # pytest", f"PASSED {T}\n", 0)
+    for _ in range(3):
+        term(eng, "python -m pytest -rA " + T, f"PASSED {T}\n", 0, raw=True)
+    assert eng.incident.ledger().passes_after(T) == 0
+    assert not eng.proof()["accepted"]

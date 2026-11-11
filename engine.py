@@ -21,6 +21,8 @@ from . import guard, ledger, logparse
 from .github import GitHub, GitHubError
 
 POLL_SECONDS = 30
+# The command must actually invoke pytest (optionally after cd/&&), not just mention it.
+_PYTEST_CMD = re.compile(r"(?:^|&&|;|\|\|)\s*(?:\S*python\S*\s+-m\s+pytest|\S*/?pytest)(?:\s|$)")
 
 
 def git_blob_sha(data: bytes) -> str:
@@ -278,7 +280,7 @@ class Engine:
         if not inc or inc.status not in ("fixing", "ready") or tool_name != "terminal":
             return
         cmd = args.get("command", "")
-        if "pytest" not in cmd or not self._in_worktree(cmd, args.get("workdir")):
+        if not _PYTEST_CMD.search(cmd) or not self._in_worktree(cmd, args.get("workdir")):
             return
         try:
             body = json.loads(result)
@@ -289,6 +291,8 @@ class Engine:
         lg = inc.ledger()
         sessions = ledger.split_sessions(output)
         for chunk in sessions:
+            if not ledger.is_real_session(chunk):
+                continue
             run = lg.record(chunk, code if len(sessions) == 1 else None, changed=bool(src))
             if run is None:
                 continue
