@@ -114,7 +114,9 @@ def blob_snapshot(root: str, tracked: dict[str, str] | None = None) -> dict[str,
     tracked = tracked or {}
     rules: list[tuple[str, str]] = []
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = sorted(d for d in dirnames if d not in guard._SKIP_DIRS and not d.endswith(".egg-info"))
+        # git submodules and nested repos are other projects: never part of the fix, so not scanned
+        dirnames[:] = sorted(d for d in dirnames if d not in guard._SKIP_DIRS and not d.endswith(".egg-info")
+                             and not os.path.exists(os.path.join(dirpath, d, ".git")))
         here = os.path.relpath(dirpath, root).replace(os.sep, "/")
         here = "" if here == "." else here
         if ".gitignore" in filenames:

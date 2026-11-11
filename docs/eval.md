@@ -51,7 +51,7 @@ What has happened so far, on a fork with the same commit:
 - ci-red-to-green's alert named the failing test, `tests/distance/test_distance.py::test_score_cutoff_equal_to_score[scorer9]`. A second failing workflow had no pytest failure in its log, and the plugin said so instead of guessing.
 - After `fix`, Hermes identified the scorer (`Prefix`) and started building RapidFuzz's C++ extension to reproduce it. The likely cause: the pure-Python `Prefix` normalized distance computes `1.0 - similarity`, which differs from the C++ result in the last bit, and the new test checks that both agree at the cutoff.
 
-The first attempt also caught a plugin bug: RapidFuzz checks out git submodules, one of which has its own `test/` folders, and the plugin read those new files as test edits, so it ignored all 7 test runs and refused to offer a PR. That was the safe failure, but the wrong one. 0.2.6 skips submodules and nested repos when it scans the clone. The proof wasn't finished when submissions closed. Its result, and the PR to RapidFuzz if the proof passes, will be added here.
+The first attempt also caught a plugin bug: RapidFuzz checks out git submodules, one of which has its own `test/` folders, and the plugin read those new files as test edits, so it ignored all 7 test runs and refused to offer a PR. That was the safe failure, but the wrong one. 0.2.7 skips submodules and nested repos when it scans the clone (0.2.6 fixed only one of the two scanners). The proof wasn't finished when submissions closed. Its result, and the PR to RapidFuzz if the proof passes, will be added here.
 
 ## Summary
 

@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from crg import engine as E
+from crg import guard
 
 T = "tests/test_dates.py::test_parse_iso"
 LOG = f"2026-11-11T06:01:05Z FAILED {T} - AssertionError: assert 11 == 12\n"
@@ -637,3 +638,16 @@ def test_recorded_commands_drop_local_paths():
     cmd = f"cd {wt} && source .venv/bin/activate && {wt}/.venv/bin/python -m pytest -rA tests/a.py::t"
     assert E._public_cmd(cmd, wt) == ".venv/bin/python -m pytest -rA tests/a.py::t"
     assert E._public_cmd("/home/bob/tools/pytest -rA", "") == "~/tools/pytest -rA"
+
+
+def test_submodule_checkouts_are_not_read_as_test_edits(tmp_path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "a.py").write_text("x = 1\n")
+    base = E.blob_snapshot(str(tmp_path))
+    sub = tmp_path / "extern" / "lib"
+    (sub / "test").mkdir(parents=True)
+    (sub / ".git").write_text("gitdir: ../../.git/modules/lib\n")
+    (sub / "test" / "t.cpp").write_text("int main() {}\n")
+    (tmp_path / "src" / "a.py").write_text("x = 2\n")
+    src, prot = guard.split(guard.changes(base, E.blob_snapshot(str(tmp_path), base)))
+    assert src == {"src/a.py": "modified"} and prot == {}
