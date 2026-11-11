@@ -1,10 +1,10 @@
 # ci-red-to-green
 
-![ci-red-to-green: a red CI run becomes a proven fix PR](docs/assets/banner.png)
+![A real run: the Telegram alert, reply fix, Hermes asks before running the tests, the proof fills in, Open PR](docs/assets/loop.gif)
 
 **Red CI in, proven fix out.**
 
-When your GitHub Actions run goes red, Hermes tells you which test broke and which commit most likely broke it. Reply `fix` and Hermes reproduces the failure, fixes the source, and offers a pull request only after its own test output shows each failing test failed twice before the change and passed three times in a row after it. The PR contains source files only, so GitHub runs your original tests against the fix.
+When your GitHub Actions run goes red, Hermes tells you which test broke and which commit broke it. Reply `fix` and Hermes reproduces the failure and fixes the source. You get a pull request only after its own test output proves three things: each failing test passed at the last green commit, failed twice on the red one, and passed three times in a row with the fix. The PR contains source files only, so GitHub runs your original tests against the fix.
 
 It needs Hermes because the proof comes from Hermes's own terminal results, the first command that runs your repo's code goes through Hermes's approval prompt, and the alert, the reply and the Open PR button live in the chat and the Desktop app you already use.
 
