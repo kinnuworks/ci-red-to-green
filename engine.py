@@ -11,6 +11,7 @@ import difflib
 import fnmatch
 import hashlib
 import json
+import logging
 import os
 import re
 import threading
@@ -311,7 +312,7 @@ class Engine:
                     self._post(f"CI watch stopped: {e}")
                     return
             except Exception:  # never let one bad poll kill the watcher
-                pass
+                logging.getLogger(__name__).exception("ci-red-to-green: poll failed")
             stop.wait(POLL_SECONDS)
 
     def start_thread(self, runner: Callable[[Callable[[], None]], None] | None = None) -> None:
@@ -338,24 +339,39 @@ class Engine:
         if inc and inc.status == "pr_open":
             self._follow_pr(self.gh(inc.repo or None), inc)
         for w in list(self.watches):
-            gh = self.gh(w.repo)
-            for run in gh.runs(branch=w.branch):
-                if run.get("status") != "completed" or run["id"] in w.seen:
-                    continue
-                w.seen.append(run["id"])
-                del w.seen[:-200]
-                self.save()
-                if run.get("conclusion") != "failure":
-                    continue
-                if not self._busy():
-                    self._open_incident(gh, run, w)
-                elif self.incident.repo != w.repo:
-                    # one fix at a time: another repo's red run waits its turn
-                    self.queue.append({"repo": w.repo, "branch": w.branch, "run": run})
+            try:
+                self._tick_watch(w)
+            except GitHubError as e:
+                if e.status in (401, 403, 404) and not w.demo:
+                    # this repo's access is gone: stop watching it, keep the others
+                    self.watches = [x for x in self.watches if x.repo != w.repo]
                     self.save()
-                    self._post(f"Also red: {w.repo} @ {w.branch} (run #{run.get('run_number')}). "
-                               f"Queued; I'll pick it up when the current fix for {self.incident.repo} is done or discarded.")
-                # a newer red run on the repo being fixed is the same incident, so it's skipped
+                    self._post(f"Stopped watching {w.repo}: {e}")
+                else:
+                    raise
+        self._drain_queue()
+
+    def _tick_watch(self, w: Watch) -> None:
+        gh = self.gh(w.repo)
+        for run in gh.runs(branch=w.branch):
+            if run.get("status") != "completed" or run["id"] in w.seen:
+                continue
+            w.seen.append(run["id"])
+            del w.seen[:-200]
+            self.save()
+            if run.get("conclusion") != "failure":
+                continue
+            if not self._busy():
+                self._open_incident(gh, run, w)
+            elif self.incident.repo != w.repo:
+                # one fix at a time: another repo's red run waits its turn
+                self.queue.append({"repo": w.repo, "branch": w.branch, "run": run})
+                self.save()
+                self._post(f"Also red: {w.repo} @ {w.branch} (run #{run.get('run_number')}). "
+                           f"Queued; I'll pick it up when the current fix for {self.incident.repo} is done or discarded.")
+            # a newer red run on the repo being fixed is the same incident, so it's skipped
+
+    def _drain_queue(self) -> None:
         while not self._busy() and self.queue:
             q = self.queue.pop(0)
             w = self._watch_for(q["repo"])
@@ -556,9 +572,9 @@ class Engine:
                             state=_state_of(src, snap))
             if run is None:
                 continue
-            run.full_suite = len(run.results) > len(inc.test_ids)
+            run.full_suite = rn.is_full(cmd)
             inc.runs.append(asdict(run))
-        if inc.ledger().verdict(_state_of(src, snap) if src else None)[0]:
+        if inc.ledger().verdict(_state_of(src, snap) if src else None, need_green=bool(inc.anchor_blobs))[0]:
             inc.status = "ready"
         self.save()
 
@@ -594,7 +610,7 @@ class Engine:
         lg = inc.ledger()
         snap = blob_snapshot(inc.worktree, inc.base_tree) if os.path.isdir(inc.worktree) else {}
         src, prot = guard.split(guard.changes(inc.base_tree, snap)) if snap else ({}, {})
-        summ = lg.summary(_state_of(src, snap) if src else None)
+        summ = lg.summary(_state_of(src, snap) if src else None, need_green=bool(inc.anchor_blobs))
         ok = summ["accepted"] and bool(src) and not prot
         reasons = list(summ["reasons"])
         if not src:

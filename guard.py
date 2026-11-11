@@ -22,7 +22,7 @@ def is_protected(path: str) -> bool:
     parts = set(p.parts[:-1])
     if parts & {"tests", "test", "testing"}:
         return True
-    if name.startswith("test_") or name.endswith(("_test.py", "_test.go")):
+    if name.startswith("test_") or name.endswith(("_test.py", "_test.go")) or name in ("tests.py", "test.py"):
         return True
     if name in _TEST_CONFIG:
         return True

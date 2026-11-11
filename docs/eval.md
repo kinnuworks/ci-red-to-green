@@ -29,9 +29,10 @@ To see ci-red-to-green work on a real project instead of a toy repo, I replayed 
 
 ## Honest notes
 
-- **These are replays, not live bugs.** The fork still has humanize's history, so the agent could read the original fix. Four of the six fixes match humanize's own fix; for #295 and #392 the agent wrote a different fix, and both passed humanize's CI. The point of the eval is the plugin's gate, not the model's ingenuity.
-- **CI changes on the fork.** Two commits changed only the fork's workflow, not source or tests. The jobs run on Ubuntu only (9 Python versions instead of 27 jobs), so a replay doesn't wait in the macOS and Windows queue. The translations are compiled with `polib` instead of `gettext`, because GitHub's runners couldn't reach the Ubuntu package mirrors that day. Unrelated workflows (benchmarks, docs, release and label bots, lint) are disabled on the fork.
+- **These are replays, so they are easy for the agent.** The fork still has humanize's history, each replay reverts one place in the source, and the replay commit's title (which the alert shows as the suspect commit) names the bug. All six fixes restore the original logic; two of them reword or add a comment. So this eval says nothing about how good the model is at finding new bugs. It shows the plugin's gate and loop working on a real 878-test project: alert, reproduce, prove, one-file PR, green CI.
+- **CI changes on the fork.** Three commits changed only the fork's workflow, not source or tests. The jobs run on Ubuntu only (9 Python versions instead of 27 jobs), so a replay doesn't wait in the macOS and Windows queue. The translations are compiled with `polib` instead of `gettext`, because GitHub's runners couldn't reach the Ubuntu package mirrors that day. Unrelated workflows (benchmarks, docs, release and label bots, lint) are disabled on the fork.
 - **Approvals.** I approved each install and first test run in Telegram myself, as the person running the eval.
+- **The plugin changed during the eval.** Two fixes it led to (below) landed between replays, so replays 1 to 3 ran partly on earlier builds; replays 4 to 6 ran on the build with both fixes.
 
 ## What the eval caught (and the fixes)
 

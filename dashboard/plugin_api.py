@@ -31,12 +31,12 @@ def _engine():
 
 
 @router.get("/state")
-async def state():
+def state():
     return _engine().snapshot()
 
 
 @router.post("/open-pr")
-async def open_pr():
+def open_pr():
     eng = _engine()
     try:
         return {"message": eng.open_pr(), **eng.snapshot()}
@@ -45,13 +45,13 @@ async def open_pr():
 
 
 @router.post("/discard")
-async def discard():
+def discard():
     eng = _engine()
     return {"message": eng.discard(), **eng.snapshot()}
 
 
 @router.post("/demo")
-async def start_demo():
+def start_demo():
     eng = _engine()
     return {"message": eng.start_demo(), **eng.snapshot()}
 
@@ -62,7 +62,7 @@ class WatchBody(BaseModel):
 
 
 @router.post("/watch")
-async def watch(body: WatchBody):
+def watch(body: WatchBody):
     eng = _engine()
     if body.repo.count("/") != 1:
         raise HTTPException(status_code=400, detail="Use owner/repo")

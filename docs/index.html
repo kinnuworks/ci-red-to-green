@@ -328,7 +328,7 @@ kbd{display:inline-grid;place-items:center;min-width:26px;height:26px;padding:0 
             <div class="tg__msgs">
               <div class="bub bub--in"><b>CI red on main:</b> <span class="m">tests/test_parse.py::test_days_in_month_leap</span><br><span class="red m">assert 28 == 29</span><br>run #7 · <span class="m">0daaf7c</span><br>Reply fix and I'll reproduce it and prove a fix before offering a PR.<span class="t">1:38</span></div>
               <div class="bub bub--out">fix<span class="t">1:38</span></div>
-              <div class="bub bub--in">Fix for run #7 on main<br><span class="m">test_days_in_month_leap</span>: <span class="red">FAILED before the fix</span> · <span class="grn">PASSED after it 3/3 ✓</span><br>suite: no new failures<br>test files untouched<br>changed: modified <span class="m">datekit/parse.py</span><span class="t">12:27</span></div>
+              <div class="bub bub--in">Fix for run #7 on main<br><span class="m">test_days_in_month_leap</span>: <span class="grn">PASSED at last green</span> · <span class="red">FAILED before the fix 2/2</span> · <span class="grn">PASSED after it 3/3 ✓</span><br>suite: no new failures<br>test files untouched<br>changed: modified <span class="m">datekit/parse.py</span><span class="t">12:27</span></div>
               <div class="bub bub--in">Open the PR? It has source files only and never touches the base branch.<br>1. Open PR<br>2. Discard<span class="t">12:27</span></div>
               <div class="tg__btns"><span>1</span><span>2</span></div>
               <div class="bub bub--in">Done. GitHub's CI is green on the fix: <span class="lnk">datekit-demo/actions/runs/…</span><br>PR: <span class="lnk">datekit-demo/pull/2</span> (not merged; that's yours)<span class="t">12:28</span></div>
@@ -343,7 +343,7 @@ kbd{display:inline-grid;place-items:center;min-width:26px;height:26px;padding:0 
             <div class="gh__files"><div><span>1 file changed</span><span><span class="add">+2</span> <span class="del">−0</span></span></div><div><span>datekit/parse.py</span><span class="add">+2</span></div></div>
             <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M7.5 12.5l3 3 6-6.5"/></svg>All checks have passed · ci / test</div>
             <div class="proof" style="margin-top:14px">
-              <div class="proof__row"><span class="proof__id">test_days_in_month_leap</span><span style="display:flex;gap:6px"><span class="tagx tagx--fail">FAILED before</span><span class="tagx tagx--pass">PASSED 3/3 after</span></span></div>
+              <div class="proof__row"><span class="proof__id">test_days_in_month_leap</span><span style="display:flex;gap:6px"><span class="tagx tagx--fail">FAILED 2/2</span><span class="tagx tagx--pass">PASSED 3/3 after</span></span></div>
             </div>
           </div>
         </div>
@@ -359,7 +359,7 @@ kbd{display:inline-grid;place-items:center;min-width:26px;height:26px;padding:0 
       <span class="eyebrow"><span class="dot"></span>Real, not a mock-up</span>
       <h2>One real run, start to finish.</h2>
       <p class="lead">A commit swapped <span class="t-mono">monthrange(...)[1]</span> for <span class="t-mono">[0]</span> (the weekday, not the day count) and CI went red. The alert named the commit. The tests passed at the last green commit, failed twice on the red one and passed three times with the fix. Then <a href="https://github.com/kinnuworks/datekit-demo/pull/4" style="text-decoration:underline">PR #4</a> went green on GitHub, about five minutes after the red run. The middle of the film is screen captures from Telegram, Hermes Desktop and GitHub, sped up; only the opening title and the end card are animated. <a href="https://github.com/kinnuworks/ci-red-to-green/blob/main/docs/how-the-proof-works.md" style="text-decoration:underline">How the proof works</a>.</p>
-      <p class="lead" style="margin-top:12px"><b>On a real project:</b> six real humanize bugs, replayed on a fork with humanize's own 878 tests and CI. <a href="https://github.com/kinnuworks/ci-red-to-green/blob/main/docs/eval.md" style="text-decoration:underline">6 of 6 ended in a proven, one-file PR that went green</a>, most in about 6 minutes from red CI to green PR.</p>
+      <p class="lead" style="margin-top:12px"><b>On a real project:</b> six real humanize bugs, replayed on a fork with humanize's own 878 tests and CI. <a href="https://github.com/kinnuworks/ci-red-to-green/blob/main/docs/eval.md" style="text-decoration:underline">6 of 6 ended in a proven, one-file PR that went green</a>, most in about 6 minutes from red CI to green PR. They're replays of fixed bugs, so read the honest notes there.</p>
     </div>
     <div class="window" style="max-width:980px;margin-inline:auto"><video src="assets/demo.mp4" poster="assets/demo-poster.jpg" controls playsinline preload="none" style="width:100%;display:block;background:#0b0c10"></video></div>
     <div class="grid-2" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;max-width:980px;margin-inline:auto">
@@ -432,9 +432,9 @@ tests/test_parse.py::test_add_months_negative <span class="f">FAILED</span><br>
         <div class="window" aria-hidden="true">
           <div class="window__bar"><div class="lights"><i></i><i></i><i></i></div><span class="window__title">/ci · run #2 on main</span></div>
           <div class="proof" style="padding:8px 20px 18px">
-            <div class="proof__row"><span class="proof__id">test_add_months_clamps_to_month_end</span><span style="display:flex;gap:6px;align-items:center"><span class="tagx tagx--fail">FAILED before</span><span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i></span></span></div>
-            <div class="proof__row"><span class="proof__id">test_add_months_across_year</span><span style="display:flex;gap:6px;align-items:center"><span class="tagx tagx--fail">FAILED before</span><span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i></span></span></div>
-            <div class="proof__row"><span class="proof__id">test_add_months_negative</span><span style="display:flex;gap:6px;align-items:center"><span class="tagx tagx--fail">FAILED before</span><span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i></span></span></div>
+            <div class="proof__row"><span class="proof__id">test_add_months_clamps_to_month_end</span><span style="display:flex;gap:6px;align-items:center"><span class="tagx tagx--fail">FAILED 2/2</span><span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i></span></span></div>
+            <div class="proof__row"><span class="proof__id">test_add_months_across_year</span><span style="display:flex;gap:6px;align-items:center"><span class="tagx tagx--fail">FAILED 2/2</span><span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i></span></span></div>
+            <div class="proof__row"><span class="proof__id">test_add_months_negative</span><span style="display:flex;gap:6px;align-items:center"><span class="tagx tagx--fail">FAILED 2/2</span><span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i></span></span></div>
             <div class="proof__row"><span>Full suite</span><span class="tagx tagx--pass">no new failures</span></div>
             <div class="proof__row"><span>Changed</span><span class="t-mono" style="font-size:12px">modified datekit/parse.py</span></div>
           </div>

@@ -1,5 +1,5 @@
 name: ci-red-to-green
-version: 0.2.0
+version: 0.2.1
 description: "Red GitHub Actions run in, proven fix PR out: the PR is offered only after Hermes's own test output (pytest or go test) shows each failing test failed twice before the fix and passed three times after, and it carries source files only. Try it with /ci demo, no token needed."
 author: kinnuworks
 requires_hermes: ">=0.23.1"

@@ -6,10 +6,12 @@ agent runs them through Hermes (and its approval prompt); the plugin only reads
 the results in post_tool_call.
 
 A fix is accepted only when, for every failing test id from CI:
-  * at least one run before any source change shows it FAILED (or ERROR), and
-  * the last three runs after the change all show it PASSED,
-and, if a full-suite run was recorded before and after, no test that passed
-before fails after.
+  * two runs before any source change show it FAILED (or ERROR), and none PASSED,
+  * when there was a green run before: one run with the changed source files put back
+    as they were at that green commit shows it PASSED,
+  * the last three runs after the change, on the exact code that ships, show it PASSED,
+and a full-suite run before and after the change shows no test that passed before
+now failing.
 """
 
 from __future__ import annotations
@@ -122,10 +124,17 @@ class Ledger:
         b, a = before[-1].results, after[-1].results
         return sorted(t for t, o in b.items() if o == "PASSED" and a.get(t) in ("FAILED", "ERROR"))
 
-    def verdict(self, state: str | None = None) -> tuple[bool, list[str]]:
-        """(accepted, reasons). Reasons explain every unmet condition."""
+    def verdict(self, state: str | None = None, need_green: bool = False) -> tuple[bool, list[str]]:
+        """(accepted, reasons). Reasons explain every unmet condition. need_green: a last green
+        commit exists, so the regression must be confirmed there too."""
         why: list[str] = []
         for tid in self.test_ids:
+            if need_green:
+                g = self.at_green(tid)
+                if g is None:
+                    why.append(f"{tid}: not yet run with the source as it was at the last green commit")
+                elif g != "PASSED":
+                    why.append(f"{tid}: also fails at the last green commit, so these commits didn't cause it")
             if self.flaky(tid):
                 why.append(f"{tid}: passed before any change, so it's flaky, not broken")
             elif not self.failed_before(tid):
@@ -140,8 +149,8 @@ class Ledger:
             why.append("new failures in the full suite: " + ", ".join(nf))
         return (not why, why)
 
-    def summary(self, state: str | None = None) -> dict:
-        ok, why = self.verdict(state)
+    def summary(self, state: str | None = None, need_green: bool = False) -> dict:
+        ok, why = self.verdict(state, need_green)
         nf = self.new_failures(state)
         return {
             "accepted": ok,

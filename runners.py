@@ -31,6 +31,14 @@ def _only_runs(cmd: str, invocation: re.Pattern) -> bool:
     return all(_PREFIX_OK.match(p) for p in parts[:-1])
 
 
+def _last_part(cmd: str) -> str:
+    """The test command itself: the last part of a `cd x && source y && <command>` chain."""
+    body = (cmd or "").split(" #", 1)[0]
+    parts = [p.strip() for p in re.split(r"&&|\|\||;", body) if p.strip()]
+    last = parts[-1] if parts else ""
+    return re.sub(r"^(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)+", "", last)
+
+
 def _between(text: str, start: re.Pattern, end: re.Pattern) -> str:
     """The part of the output from the runner's own header to its own closing line."""
     m = start.search(text)
@@ -46,7 +54,7 @@ class Pytest:
     install_hint = "for example python -m pip install -e . pytest"
     flags_note = "Always pass -rA to pytest"
     # The command must actually invoke pytest (optionally after cd/&&), not just mention it.
-    _CMD = re.compile(r"(?:\S*python\S*\s+-m\s+pytest|\S*/?pytest)(?:\s|$)")
+    _CMD = re.compile(r"(?:(?:uv|poetry|pipenv|hatch|pdm)\s+run\s+(?:--\S+\s+)*)?(?:\S*python\S*\s+-m\s+pytest|\S*/?pytest)(?:\s|$)")
 
     def parse_log(self, text: str) -> logparse.Failure:
         return logparse.parse_log(text)
@@ -56,6 +64,29 @@ class Pytest:
 
     def is_cmd(self, cmd: str) -> bool:
         return _only_runs(cmd, self._CMD)
+
+    def is_full(self, cmd: str) -> bool:
+        """A full-suite run: pytest with options only, no test files, folders, ids or -k/-m filters."""
+        try:
+            words = shlex.split(_last_part(cmd))
+        except ValueError:
+            return False
+        if "pytest" not in words:
+            return False
+        after = words[words.index("pytest") + 1:]
+        takes_value = {"-p", "-c", "-o", "--rootdir", "--confcutdir", "--basetemp", "-W", "--maxfail", "-n", "--tb", "-r"}
+        i = 0
+        while i < len(after):
+            a = after[i]
+            if a in ("-k", "-m", "--deselect", "--lf", "--last-failed", "--ff", "-x", "--exitfirst") or a.startswith(("-k", "-m")) and len(a) > 2 and not a.startswith("-m" + "pytest"):
+                return False
+            if a in takes_value:
+                i += 2
+                continue
+            if not a.startswith("-"):
+                return False
+            i += 1
+        return True
 
     def split_sessions(self, output: str) -> list[str]:
         return ledger.split_sessions(output)
@@ -128,6 +159,11 @@ class GoTest:
 
     def is_cmd(self, cmd: str) -> bool:
         return _only_runs(cmd, self._CMD)
+
+    def is_full(self, cmd: str) -> bool:
+        """A full-suite run: every package (./...) and no -run filter."""
+        last = _last_part(cmd)
+        return "./..." in last and " -run" not in last
 
     def split_sessions(self, output: str) -> list[str]:
         return [output]  # one go test call reports every package it ran

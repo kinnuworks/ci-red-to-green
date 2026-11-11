@@ -583,3 +583,45 @@ def test_pr_checks_that_end_without_a_result_are_reported(tmp_path):
     FakeGH.state["pr_runs"] = [{"status": "completed", "conclusion": "cancelled", "html_url": "u"}]
     eng.tick()
     assert eng.incident.status == "ci_red" and "without a result" in posts[-1]
+
+
+def test_green_check_is_required_when_a_green_commit_exists(tmp_path):
+    green_src = b"def month(s):\n    return int(s[5:7])\n"
+    eng, posts = make(tmp_path)
+    eng.start_watch("o/r", "main")
+    FakeGH.state["runs"] = [red_run(12), green_run(11, "b" * 40)]
+    FakeGH.state["commits"] = [{"sha": "a" * 40, "commit": {"message": "Off by one"}, "author": {"login": "dev1"}}]
+    FakeGH.state["files"] = ["src/dates.py"]
+    FakeGH.state["trees"] = {"b" * 40: {**BASE, "src/dates.py": green_src}}
+    eng.tick()
+    eng.fix_context()
+    write_worktree(eng, BASE)
+    for _ in range(2):
+        term(eng, "python -m pytest -rA " + T, f"FAILED {T}\n", 1)
+    suite(eng, [T], True)
+    write_worktree(eng, {"src/dates.py": b"def month(s):\n    return int(s[5:7]) + 0\n"})
+    for _ in range(3):
+        term(eng, "python -m pytest -rA " + T, f"PASSED {T}\n", 0)
+    suite(eng, [T], False)
+    p = eng.proof()
+    assert not p["accepted"] and any("last green commit" in r for r in p["reasons"])
+
+
+def test_a_lost_token_stops_only_that_repo(tmp_path):
+    eng, posts = make(tmp_path)
+    FakeGH.state["runs"] = {}
+    eng.start_watch("o/r", "main")
+    eng.start_watch("o/gone", "main")
+    orig = FakeGH.runs
+
+    def runs(self, branch=None, head_sha=None, per_page=10):
+        if self.repo == "o/gone":
+            raise E.GitHubError(404, "Not Found")
+        return orig(self, branch, head_sha, per_page)
+
+    FakeGH.runs = runs
+    try:
+        eng.tick()
+    finally:
+        FakeGH.runs = orig
+    assert [w.repo for w in eng.watches] == ["o/r"] and "Stopped watching o/gone" in posts[-1]

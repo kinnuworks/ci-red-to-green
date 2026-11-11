@@ -25,3 +25,8 @@ def test_changes_and_split():
     src, prot = guard.split({**ch, "tests/test_a.py": "modified"})
     assert set(src) == {"src/a.py", "src/new.py", "gone.py"}
     assert prot == {"tests/test_a.py": "modified"}
+
+
+def test_django_style_test_modules_are_protected():
+    from crg import guard as g
+    assert g.is_protected("app/tests.py") and g.is_protected("pkg/test.py") and not g.is_protected("pkg/testing_utils.py")

@@ -80,3 +80,22 @@ def test_results_only_count_inside_the_pytest_session():
            "========================= 1 failed in 0.02s =========================\n"
            "PASSED tests/a.py::t\n")
     assert py.parse_results(out) == {"tests/a.py::t": "FAILED"}
+
+
+def test_full_suite_is_judged_by_the_command():
+    py = runners.get("pytest")
+    assert py.is_full("cd /w && python -m pytest -rA")
+    assert py.is_full("cd /w && source .venv/bin/activate && RUN=after python -m pytest -rA -p no:cacheprovider")
+    assert not py.is_full("python -m pytest -rA tests/test_a.py")
+    assert not py.is_full("python -m pytest -rA 'tests/a.py::t[1]'")
+    assert not py.is_full("python -m pytest -rA -k parse")
+    assert not py.is_full("python -m pytest -rA tests/")
+    assert runners.get("go").is_full("go test -v -count=1 ./...")
+    assert not runners.get("go").is_full("go test -v -count=1 -run '^(TestA)$' ./...")
+
+
+def test_wrapped_pytest_commands_count():
+    py = runners.get("pytest")
+    for c in ("uv run pytest -rA", "cd /w && uv run --frozen pytest -rA tests/a.py::t", "poetry run pytest -rA", "hatch run python -m pytest -rA"):
+        assert py.is_cmd(c), c
+    assert not py.is_cmd("uv run python -c 'print(1)'")
