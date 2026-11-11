@@ -357,13 +357,13 @@ kbd{display:inline-grid;place-items:center;min-width:26px;height:26px;padding:0 
   <div class="container stack">
     <div class="section-head">
       <span class="eyebrow"><span class="dot"></span>Real, not a mock-up</span>
-      <h2>A real run in Hermes Desktop.</h2>
-      <p class="lead">Below is <span class="t-mono">/ci demo</span> running for real: humanize's own bug from its PR #329 (<span class="t-mono">naturalsize(999999)</span> gave <span class="t-mono">1000.0 kB</span>), humanize's own tests, Hermes doing the fix, and the plugin's pane filling in from the actual pytest output. The film around it is animated; the middle is screen captures, sped up.</p>
+      <h2>One real run, start to finish.</h2>
+      <p class="lead">A commit swapped <span class="t-mono">monthrange(...)[1]</span> for <span class="t-mono">[0]</span> (the weekday, not the day count) and CI went red. The alert named the commit. The tests passed at the last green commit, failed twice on the red one and passed three times with the fix. Then <a href="https://github.com/kinnuworks/datekit-demo/pull/4" style="text-decoration:underline">PR #4</a> went green on GitHub, about five minutes after the red run. The middle of the film is screen captures from Telegram, Hermes Desktop and GitHub, sped up; only the opening title and the end card are animated.</p>
     </div>
     <div class="window" style="max-width:980px;margin-inline:auto"><video src="assets/demo.mp4" poster="assets/demo-poster.jpg" controls playsinline preload="none" style="width:100%;display:block;background:#0b0c10"></video></div>
     <div class="grid-2" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px;max-width:980px;margin-inline:auto">
-      <figure style="margin:0"><div class="window"><img src="assets/real-approval.jpg" alt="Hermes Desktop asking to approve the first pytest run in the fix folder" loading="lazy" style="width:100%;display:block"></div><figcaption class="t-small" style="margin-top:8px">The first command that runs the repo's code goes to Hermes's approval prompt.</figcaption></figure>
-      <figure style="margin:0"><div class="window"><img src="assets/real-proven.jpg" alt="The CI red to green pane: each test FAILED twice before and PASSED three times after, the suite clean, and the diff" loading="lazy" style="width:100%;display:block"></div><figcaption class="t-small" style="margin-top:8px">Two red dots before, three green after, no new failures, and the diff, before you open the PR.</figcaption></figure>
+      <figure style="margin:0"><div class="window"><img src="assets/real-pr4.jpg" alt="Pull request #4: a table with each test PASSED at the last green commit, FAILED 2 of 2 runs before the fix, and PASSED 3 of 3 runs after" loading="lazy" style="width:100%;display:block"></div><figcaption class="t-small" style="margin-top:8px">The PR carries the proof: green at the last good commit, red before the fix, green three times after.</figcaption></figure>
+      <figure style="margin:0"><div class="window"><img src="assets/real-proven.jpg" alt="The CI red to green pane in Hermes Desktop with the proof and the diff" loading="lazy" style="width:100%;display:block"></div><figcaption class="t-small" style="margin-top:8px">In Hermes Desktop the pane fills in live; <span class="t-mono">/ci demo</span> runs the same loop on a real humanize bug, no token needed.</figcaption></figure>
     </div>
   </div>
 </section>

@@ -9,7 +9,7 @@ When your GitHub Actions run goes red, Hermes tells you which test broke and whi
 It needs Hermes because the proof comes from Hermes's own terminal results, the first command that runs your repo's code goes through Hermes's approval prompt, and the alert, the reply and the Open PR button live in the chat and the Desktop app you already use.
 
 Site, with a live simulator of the gate: https://kinnuworks.github.io/ci-red-to-green/
-A real run, in public: [this PR](https://github.com/kinnuworks/datekit-demo/pull/1) was opened by the plugin after CI went red on three tests. Its body has the before and after table, it holds one source file, and GitHub's check on it passed.
+A real run, in public: [PR #4](https://github.com/kinnuworks/datekit-demo/pull/4) was opened by the plugin after a commit broke five tests. Its table shows each test passed at the last green commit, failed twice before the fix and passed three times after; it holds one source file, and GitHub's checks passed about five minutes after the red run. Earlier runs: [#1](https://github.com/kinnuworks/datekit-demo/pull/1), [#2](https://github.com/kinnuworks/datekit-demo/pull/2), [#3](https://github.com/kinnuworks/datekit-demo/pull/3).
 
 ## Try it in 30 seconds, no token needed
 
