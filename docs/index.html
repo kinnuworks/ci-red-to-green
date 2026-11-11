@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ci-red-to-green</title>
 <meta name="description" content="A Hermes Agent plugin. When CI goes red, Hermes messages you. Reply fix, and you get a pull request only after pytest shows the failing test failed before the change and passed three times after it.">
+<link rel="icon" type="image/png" href="assets/favicon.png">
 <script>document.documentElement.classList.add('js')</script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400..600&family=Public+Sans:wght@400..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -104,7 +105,7 @@ h3,.t-h3{margin:0;font-family:var(--font-display);font-size:var(--fs-h3);font-we
 .nav--on-color .nav__links a{color:rgba(255,255,255,.85)}
 .nav--on-color .nav__links a:hover{background:rgba(255,255,255,.12);color:#fff}
 .nav--on-color .btn-ink{background:#fff;color:#0E1116}
-.app-icon{width:28px;height:28px;border-radius:22.5%;flex:none;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.12)}
+.app-icon{width:28px;height:28px;border-radius:22.5%;flex:none}
 @media (max-width:760px){.nav__links{display:none}.nav__bar{justify-content:space-between}}
 
 /* ---------- Badge / chips / segmented / controls ---------- */
@@ -292,7 +293,7 @@ kbd{display:inline-grid;place-items:center;min-width:26px;height:26px;padding:0 
 <nav class="nav" aria-label="Main">
   <div class="nav__bar">
     <a class="nav__brand" href="#top">
-      <svg class="app-icon" viewBox="0 0 28 28" aria-hidden="true"><defs><linearGradient id="ai" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF6B6B"/><stop offset=".5" stop-color="#5B6CFF"/><stop offset="1" stop-color="#2DA44E"/></linearGradient></defs><rect width="28" height="28" rx="6.3" fill="url(#ai)"/><path d="M8.5 14.5l3.6 3.6 7.4-8.2" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <img class="app-icon" src="assets/logo-256.png" alt="" width="28" height="28">
       ci-red-to-green
     </a>
     <div class="nav__links">
@@ -551,7 +552,7 @@ tests/test_parse.py::test_add_months_negative <span class="f">FAILED</span><br>
 
 <section class="section section--alt" style="text-align:center">
   <div class="container">
-    <svg viewBox="0 0 28 28" style="width:88px;height:88px;margin:0 auto 28px;border-radius:20px;box-shadow:var(--shadow-2)" aria-hidden="true"><defs><linearGradient id="ai2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FF6B6B"/><stop offset=".5" stop-color="#5B6CFF"/><stop offset="1" stop-color="#2DA44E"/></linearGradient></defs><rect width="28" height="28" rx="6.3" fill="url(#ai2)"/><path d="M8.5 14.5l3.6 3.6 7.4-8.2" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <img src="assets/logo-256.png" alt="" width="88" height="88" style="margin:0 auto 28px;border-radius:20px;box-shadow:var(--shadow-2)">
     <h2>The next red run is one reply away.<br><span class="t-muted">Free and open source.</span></h2>
     <div class="cta-row">
       <a class="btn btn-ink btn-lg" href="#install">Install in Hermes</a>
@@ -563,7 +564,7 @@ tests/test_parse.py::test_add_months_negative <span class="f">FAILED</span><br>
 
 <footer class="footer">
   <div class="container">
-    <span style="display:flex;align-items:center;gap:10px"><svg class="app-icon" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="6.3" fill="#5B6CFF"/><path d="M8.5 14.5l3.6 3.6 7.4-8.2" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>ci-red-to-green, a plugin for Hermes Agent</span>
+    <span style="display:flex;align-items:center;gap:10px"><img class="app-icon" src="assets/logo-256.png" alt="" width="28" height="28">ci-red-to-green, a plugin for Hermes Agent</span>
     <span><a href="https://github.com/kinnuworks/ci-red-to-green">GitHub</a> · MIT license</span>
   </div>
 </footer>
