@@ -1,6 +1,6 @@
 ========================================================================================= test session starts ==========================================================================================
 platform darwin -- Python 3.15.2, pytest-9.2.0, pluggy-1.7.0
-rootdir: humanize_mini, configfile: pytest.ini
+rootdir: humanize_mini
 configfile: pytest.ini
 collected 17 items
 
