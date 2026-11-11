@@ -99,6 +99,11 @@ class GitHub:
         out = self._req("GET", f"/repos/{self.repo}/compare/{base}...{head}")
         return out.get("commits", [])
 
+    def compare_files(self, base: str, head: str) -> list[str]:
+        """Paths changed between two commits (added files excluded: they didn't exist at base)."""
+        out = self._req("GET", f"/repos/{self.repo}/compare/{base}...{head}")
+        return [f["filename"] for f in out.get("files", []) if f.get("status") in ("modified", "removed", "renamed", "changed")]
+
     def commit(self, sha: str) -> dict:
         return self._req("GET", f"/repos/{self.repo}/commits/{sha}")
 

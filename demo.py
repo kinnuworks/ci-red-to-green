@@ -71,6 +71,9 @@ class DemoGitHub:
     def compare(self, base: str, head: str) -> list[dict]:
         return []
 
+    def compare_files(self, base: str, head: str) -> list[str]:
+        return []
+
     def create_branch_commit(self, base_sha: str, files: dict[str, bytes | None], message: str, branch: str) -> str:
         chunks = [f"Subject: {message}\n\n"]
         for path, new in sorted(files.items()):

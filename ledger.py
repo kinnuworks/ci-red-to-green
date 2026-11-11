@@ -63,6 +63,7 @@ class Run:
     results: dict[str, str]
     exit_code: int | None
     full_suite: bool
+    anchor: bool = False  # ran with the source files restored to the last green commit
 
 
 @dataclass
@@ -71,29 +72,38 @@ class Ledger:
     runs: list[Run] = field(default_factory=list)
     parse: Callable[[str], dict[str, str]] | None = field(default=None, repr=False, compare=False)
 
-    def record(self, output: str, exit_code: int | None, changed: bool, full_suite: bool = False) -> Run | None:
+    def record(self, output: str, exit_code: int | None, changed: bool, full_suite: bool = False,
+               anchor: bool = False) -> Run | None:
         results = (self.parse or parse_results)(output)
         if not results:
             return None
-        run = Run(changed=changed, results=results, exit_code=exit_code, full_suite=full_suite)
+        run = Run(changed=changed, results=results, exit_code=exit_code, full_suite=full_suite, anchor=anchor)
         self.runs.append(run)
         return run
 
     # ---- the gate -------------------------------------------------------------
+    def _main(self) -> list[Run]:
+        return [r for r in self.runs if not r.anchor]
+
+    def at_green(self, tid: str) -> str | None:
+        """The test's latest result with the source restored to the last green commit, if it was run that way."""
+        res = [r.results[tid] for r in self.runs if r.anchor and tid in r.results]
+        return res[-1] if res else None
+
     def fails_before(self, tid: str) -> int:
-        return sum(1 for r in self.runs if not r.changed and r.results.get(tid) in ("FAILED", "ERROR"))
+        return sum(1 for r in self._main() if not r.changed and r.results.get(tid) in ("FAILED", "ERROR"))
 
     def failed_before(self, tid: str) -> bool:
         return self.fails_before(tid) >= FAILS_NEEDED
 
     def flaky(self, tid: str) -> bool:
         """Passed at least once before any source change: the failure doesn't reproduce reliably."""
-        return any(not r.changed and r.results.get(tid) == "PASSED" for r in self.runs)
+        return any(not r.changed and r.results.get(tid) == "PASSED" for r in self._main())
 
     def passes_after(self, tid: str) -> int:
         """Consecutive PASSED results for tid, counted back from the latest changed run."""
         n = 0
-        for r in reversed([r for r in self.runs if r.changed and tid in r.results]):
+        for r in reversed([r for r in self._main() if r.changed and tid in r.results]):
             if r.results[tid] != "PASSED":
                 break
             n += 1
@@ -103,8 +113,8 @@ class Ledger:
         """Tests that passed in the last full-suite run before the change and fail in the last one after.
 
         None means no before/after pair of full-suite runs was recorded."""
-        before = [r for r in self.runs if r.full_suite and not r.changed]
-        after = [r for r in self.runs if r.full_suite and r.changed]
+        before = [r for r in self._main() if r.full_suite and not r.changed]
+        after = [r for r in self._main() if r.full_suite and r.changed]
         if not before or not after:
             return None
         b, a = before[-1].results, after[-1].results
@@ -132,7 +142,7 @@ class Ledger:
         return {
             "accepted": ok,
             "reasons": why,
-            "tests": {t: {"failed_before": self.failed_before(t), "fails_before": self.fails_before(t), "flaky": self.flaky(t),
+            "tests": {t: {"failed_before": self.failed_before(t), "fails_before": self.fails_before(t), "flaky": self.flaky(t), "at_green": self.at_green(t),
                           "passes_after": self.passes_after(t)} for t in self.test_ids},
             "suite": "not run" if nf is None else ("no new failures" if not nf else f"{len(nf)} new failures"),
         }

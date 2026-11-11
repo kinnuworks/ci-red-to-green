@@ -33,6 +33,7 @@ Needs Hermes 0.23.1 or newer, and a repo whose Actions run pytest or `go test`.
 
 | Check | How |
 |---|---|
+| It's a regression from those commits | when there was a green run before, the failing test is run once with only the changed source files put back as they were at that green commit; the card and the PR show "PASSED at last green", so the proof reads green before, red after, green with the fix |
 | The failure is real | each failing test's own `FAILED` result, twice, recorded from Hermes's terminal before any source file changed |
 | It isn't flaky | if the test passes even once before the change, it's reported as flaky and no PR is offered |
 | The fix works | `PASSED` three runs in a row after the change |

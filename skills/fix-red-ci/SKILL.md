@@ -22,7 +22,7 @@ only when the record shows all of this:
 2. Install the project the way its CI does. The first command that runs the repo's code asks the user for approval.
 3. Reproduce first: run the exact test command from the alert twice, each as its own terminal call.
 4. Run the full suite once (`python -m pytest -rA`, or `go test -v -count=1 ./...`) before changing anything.
-5. If the alert lists commits since the last green run, read their diff first. The cause is usually there.
+5. If the alert lists commits since the last green run, read their diff first. The cause is usually there. Then confirm it: restore only the changed source files to the last green commit, run the failing test once (it should pass), and put the files back. The card shows this as "PASSED at last green".
 6. Fix the source. Never edit tests to make them pass; a fix that needs a test change is refused.
 7. Run the failing tests three times, then the full suite once.
 8. Don't commit or push (pushes from the fix folder are blocked). Tell the user the cause in one line and to send `/ci` (or use the CI pane in Desktop) to see the proof and open the PR.

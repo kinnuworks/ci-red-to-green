@@ -28,10 +28,15 @@ class FakeGH:
         return LOG
 
     def tree(self, sha):
-        return {p: E.git_blob_sha(b) for p, b in BASE.items()}
+        files = self.state.get("trees", {}).get(sha, BASE)
+        return {p: E.git_blob_sha(b) for p, b in files.items()}
 
     def blob(self, sha):
-        return {E.git_blob_sha(b): b for b in BASE.values()}[sha]
+        every = [BASE] + list(self.state.get("trees", {}).values())
+        return {E.git_blob_sha(b): b for files in every for b in files.values()}[sha]
+
+    def compare_files(self, base, head):
+        return self.state.get("files", [])
 
     def compare(self, base, head):
         self.state["compared"] = (base, head)
@@ -455,3 +460,32 @@ def test_worktree_match_respects_path_boundaries(tmp_path):
     assert eng._in_worktree(f"cd {wt} && pytest", None)
     assert not eng._in_worktree(f"cd {wt}0 && pytest", None)
     assert not eng._in_worktree("pytest", wt + "0")
+
+
+def test_three_point_proof_green_red_green(tmp_path):
+    green_src = b"def month(s):\n    return int(s[5:7])\n"
+    eng, posts = make(tmp_path)
+    eng.start_watch("o/r", "main")
+    FakeGH.state["runs"] = [red_run(12), green_run(11, "b" * 40)]
+    FakeGH.state["commits"] = [{"sha": "a" * 40, "commit": {"message": "Off by one"}, "author": {"login": "dev1"}}]
+    FakeGH.state["files"] = ["src/dates.py", "tests/test_dates.py"]
+    FakeGH.state["trees"] = {"b" * 40: {**BASE, "src/dates.py": green_src}}
+    eng.tick()
+    inc = eng.incident
+    assert inc.anchor_blobs == {"src/dates.py": E.git_blob_sha(green_src)}  # tests are never part of the anchor
+    ctx = eng.fix_context()
+    assert f"checkout {'b' * 40} -- src/dates.py" in ctx and f"checkout {'a' * 40} -- src/dates.py" in ctx
+    write_worktree(eng, BASE)
+    for _ in range(2):
+        term(eng, "python -m pytest -rA " + T, f"FAILED {T}\n", 1)
+    write_worktree(eng, {"src/dates.py": green_src})  # restored to green: the anchor run
+    term(eng, "python -m pytest -rA " + T, f"PASSED {T}\n", 0)
+    write_worktree(eng, BASE)  # back to red
+    assert eng.proof()["tests"][T]["at_green"] == "PASSED" and eng.proof()["tests"][T]["passes_after"] == 0
+    write_worktree(eng, {"src/dates.py": green_src})  # the fix happens to restore the green code
+    for _ in range(3):
+        term(eng, "python -m pytest -rA " + T, f"PASSED {T}\n", 0)
+    p = eng.proof()
+    assert p["tests"][T]["passes_after"] == 3 and p["accepted"], p["reasons"]
+    assert "PASSED at last green bbbbbbb" in eng.card_text()
+    assert "at the last green commit (bbbbbbb)" in eng.pr_body()

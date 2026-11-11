@@ -137,6 +137,7 @@ class Incident:
     repo: str = ""
     suspects_total: int = 0
     ignored_runs: int = 0
+    anchor_blobs: dict[str, str] = field(default_factory=dict)  # source files changed since green -> blob at green
 
     def ledger(self) -> ledger.Ledger:
         lg = ledger.Ledger(self.test_ids, parse=runners.get(self.runner).parse_results)
@@ -367,6 +368,13 @@ class Engine:
                 "author": (c.get("author") or {}).get("login") or (c.get("commit", {}).get("author") or {}).get("name", "")}
                for c in commits]
         self._suspects_total = len(out)
+        try:  # the source files that changed since green, as they were at green: the regression anchor
+            files = [f for f in gh.compare_files(green["head_sha"], run["head_sha"]) if not guard.is_protected(f)]
+            if files and len(files) <= 20:
+                at_green = gh.tree(green["head_sha"])
+                self._anchor = {f: at_green[f] for f in files if f in at_green}
+        except Exception:
+            self._anchor = {}
         return green["head_sha"], out[-5:]
 
     def _suspect_line(self, inc: Incident) -> str:
@@ -394,13 +402,14 @@ class Engine:
             return
         wt = str(self.data_dir / "worktrees" / str(run["id"]))
         self._suspects_total = 0
+        self._anchor = {}
         green, suspects = self._suspects(gh, run, w)
         self._archive()
         self.incident = Incident(
             run_id=run["id"], run_number=run.get("run_number", 0), run_url=run.get("html_url", ""),
             head_sha=run["head_sha"], branch=w.branch, repo=w.repo, test_ids=failure.test_ids,
             reasons=failure.reasons, command=runners.get(failure.runner).command(failure.test_ids), worktree=wt,
-            last_green=green, suspects=suspects, suspects_total=self._suspects_total, opened_at=self._clock(), runner=failure.runner,
+            last_green=green, suspects=suspects, suspects_total=self._suspects_total, anchor_blobs=self._anchor, opened_at=self._clock(), runner=failure.runner,
         )
         self.save()
         first = failure.test_ids[0]
@@ -433,6 +442,11 @@ class Engine:
             clue = (f"The last green commit was {inc.last_green[:7]}. These commits came in since, so the cause is most likely in one of them:\n{listing}\n"
                     f"Read what they changed first: git -C {inc.worktree} diff {inc.last_green} {inc.head_sha} -- . ':(exclude)tests'\n\n")
         rn = runners.get(inc.runner)
+        if inc.anchor_blobs:
+            files = " ".join(sorted(inc.anchor_blobs))
+            clue += (f"Then confirm it's a regression from those commits, before fixing anything: restore only the changed source files to the last green commit "
+                     f"(git -C {inc.worktree} checkout {inc.last_green} -- {files}), run {inc.command} once as its own terminal call "
+                     f"(it should pass there), then put them back (git -C {inc.worktree} checkout {inc.head_sha} -- {files}).\n\n")
         install = ("2. Nothing to install beyond pytest. " if self.watch.demo else
                    f"2. In {inc.worktree}, install the project the way its CI does ({rn.install_hint}), then ")
         return (
@@ -502,7 +516,8 @@ class Engine:
             output, code = body.get("output", ""), body.get("exit_code")
         except (ValueError, TypeError, AttributeError):
             output, code = str(result), None
-        src, prot = self.source_changes()
+        snap = blob_snapshot(inc.worktree, inc.base_tree) if os.path.isdir(inc.worktree) else {}
+        src, prot = guard.split(guard.changes(inc.base_tree, snap)) if snap else ({}, {})
         if prot:
             # a run made while tests or test config were edited proves nothing, even if the edit is undone later
             inc.ignored_runs += 1
@@ -513,7 +528,12 @@ class Engine:
         for chunk in sessions:
             if not rn.is_real_session(chunk):
                 continue
-            run = lg.record(chunk, code if len(sessions) == 1 else None, changed=bool(src))
+            # every changed source file holds exactly its last-green content: a run at the regression anchor
+            anchor = bool(src) and bool(inc.anchor_blobs) and set(src) == set(inc.anchor_blobs) and \
+                all(snap.get(f) == sha for f, sha in inc.anchor_blobs.items())
+            # only once, and only before any fix run: a fix that restores the green code is a fix, not an anchor
+            anchor = anchor and not any(r.anchor or r.changed for r in lg.runs)
+            run = lg.record(chunk, code if len(sessions) == 1 else None, changed=bool(src) and not anchor, anchor=anchor)
             if run is None:
                 continue
             run.full_suite = len(run.results) > len(inc.test_ids)
@@ -570,6 +590,8 @@ class Engine:
         for t, s in p["tests"].items():
             before = ("flaky: passed before any change" if s["flaky"] else
                       f"FAILED before the fix {min(s['fails_before'], ledger.FAILS_NEEDED)}/{ledger.FAILS_NEEDED}")
+            if s.get("at_green"):
+                before = f"{s['at_green']} at last green {inc.last_green[:7]} · " + before
             lines.append(f"{t}: {before} · PASSED after it {min(s['passes_after'], ledger.PASSES_NEEDED)}/{ledger.PASSES_NEEDED} {'✓' if s['passes_after'] >= ledger.PASSES_NEEDED else ''}".rstrip())
         lines.append(f"suite: {p['suite']}")
         lines.append("test files untouched" if not p["protected"] else "test files changed: " + ", ".join(sorted(p["protected"])))
@@ -590,14 +612,17 @@ class Engine:
     def pr_body(self) -> str:
         inc = self.incident
         p = self.proof()
-        rows = "\n".join(f"| `{t}` | FAILED {min(s['fails_before'], ledger.FAILS_NEEDED)}/{ledger.FAILS_NEEDED} runs | PASSED {min(s['passes_after'], ledger.PASSES_NEEDED)}/{ledger.PASSES_NEEDED} runs in a row |" for t, s in p["tests"].items())
+        anchored = any(s.get("at_green") for s in p["tests"].values())
+        green_col = f" at the last green commit ({inc.last_green[:7]}) |" if anchored else ""
+        rows = "\n".join(f"| `{t}` |" + (f" {s.get('at_green') or '-'} |" if anchored else "")
+                         + f" FAILED {min(s['fails_before'], ledger.FAILS_NEEDED)}/{ledger.FAILS_NEEDED} runs | PASSED {min(s['passes_after'], ledger.PASSES_NEEDED)}/{ledger.PASSES_NEEDED} runs in a row |" for t, s in p["tests"].items())
         sus = ""
         if inc.suspects:
             sus = "Commits since the last green run (" + inc.last_green[:7] + "): " + ", ".join(f"{c['sha'][:7]} {c['title']}" for c in inc.suspects) + ".\n\n"
         return (
             f"CI went red on `{inc.branch}` at {inc.head_sha[:7]} ([run #{inc.run_number}]({inc.run_url})).\n\n"
             f"This fix was checked locally by Hermes before this PR was opened. The results below come from the test runner's own output ({runners.get(inc.runner).name}), recorded by the plugin, not from the model:\n\n"
-            "| test | before the fix | after the fix |\n|---|---|---|\n" + rows + "\n\n"
+            "| test |" + green_col + " before the fix | after the fix |\n|---|" + ("---|" if anchored else "") + "---|---|\n" + rows + "\n\n"
             + sus +
             f"Full suite: {p['suite']}. Test files untouched: this commit contains source files only, so CI here runs the original tests.\n\n"
             "Opened with ci-red-to-green for Hermes Agent. It never pushes to the base branch and never merges."

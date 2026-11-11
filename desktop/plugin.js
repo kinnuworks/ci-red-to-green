@@ -162,7 +162,14 @@ function Proof({ inc }) {
       rows.push(
         row(
           jsx('span', { style: mono, title: t, children: t.split('::').pop() }),
-          jsxs('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 6 }, children: [before, dots(Math.min(st.passes_after, p.needed), p.needed, GREEN)] }),
+          jsxs('span', {
+            style: { display: 'inline-flex', alignItems: 'center', gap: 6 },
+            children: [
+              st.at_green ? jsx('span', { title: `${st.at_green} with the source as it was at the last green commit`, children: chip(st.at_green === 'PASSED' ? 'was green' : 'red at green', st.at_green === 'PASSED' ? 'pass' : 'warn') }) : null,
+              before,
+              dots(Math.min(st.passes_after, p.needed), p.needed, GREEN)
+            ]
+          }),
           t
         )
       )
