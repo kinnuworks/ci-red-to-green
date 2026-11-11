@@ -34,7 +34,7 @@ def split_sessions(output: str) -> list[str]:
     starts = [m.start() for m in _SESSION.finditer(output)]
     if len(starts) <= 1:
         return [output]
-    return [output[a:b] for a, b in zip(starts, starts[1:] + [len(output)])]
+    return [output[a:b] for a, b in zip(starts, starts[1:] + [len(output)], strict=True)]
 
 
 _SUMMARY = re.compile(r"^=+ .*\b(?:passed|failed|error|errors|skipped|deselected|no tests ran)\b.* in [0-9.]+s(?: \([0-9:]+\))? =+$", re.M)

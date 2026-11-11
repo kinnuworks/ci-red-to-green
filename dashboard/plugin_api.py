@@ -41,7 +41,7 @@ async def open_pr():
     try:
         return {"message": eng.open_pr(), **eng.snapshot()}
     except Exception as e:  # GitHub errors come back as text for the pane
-        raise HTTPException(status_code=502, detail=str(e))
+        raise HTTPException(status_code=502, detail=str(e)) from e
 
 
 @router.post("/discard")
@@ -69,6 +69,6 @@ async def watch(body: WatchBody):
     try:
         msg = eng.start_watch(body.repo.strip(), (body.branch or "main").strip())
     except Exception as e:
-        raise HTTPException(status_code=502, detail=str(e))
+        raise HTTPException(status_code=502, detail=str(e)) from e
     eng.start_thread()  # alerts show here; a /ci in a chat binds that chat for messages
     return {"message": msg, **eng.snapshot()}

@@ -1,0 +1,5 @@
+extend-exclude = ["demo"]
+
+[lint]
+select = ["E", "F", "W", "B"]
+ignore = ["E501"]
