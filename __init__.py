@@ -82,7 +82,7 @@ def register(ctx):
         verdict = engine.needs_approval(tool_name, args or {})
         if verdict == "approve":
             cmd = (args or {}).get("command", "")
-            return {"action": "approve", "message": f"ci-red-to-green: first test run in the fix folder. It runs this repo's code: {cmd[:300]}"}
+            return {"action": "approve", "message": f"ci-red-to-green: first command that runs this repo's code in the fix folder: {cmd[:300]}"}
         if verdict == "block":
             return {"action": "block", "message": "ci-red-to-green: no pushes from the fix worktree. The user opens the PR with /ci."}
         return None

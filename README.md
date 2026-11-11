@@ -16,7 +16,7 @@ hermes plugins install ci-red-to-green --enable
 
 1. Make a fine-grained GitHub token for one repo (Actions: read, Contents: read and write, Pull requests: read and write) and save it in Hermes as `CI_RED_TO_GREEN_GITHUB_TOKEN`.
 2. In your Telegram chat with Hermes: `/ci watch owner/repo main`
-3. Push a commit that breaks a test. When the alert arrives, reply `fix`, then send `/ci` and tap **Open PR**.
+3. Push a commit that breaks a test. When the alert arrives, reply `fix`. When Hermes says it's done, send `/ci` and pick **Open PR** (on Telegram, Hermes numbers the buttons: tap 1).
 
 Needs Hermes 0.23.1 or newer and a Python repo tested with pytest.
 
