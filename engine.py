@@ -226,7 +226,7 @@ class Engine:
             "the PR is built from source files only, so test edits are dropped and the fix would be refused.\n"
             f"5. After the fix, run {inc.command} three times, then the whole suite once (python -m pytest -rA).\n"
             "6. Don't commit or push. Tell the user in one line what the cause was and to send /ci to see the proof and open the PR.\n"
-            "Always pass -rA to pytest so results can be checked."
+            "Always pass -rA to pytest, and run each pytest command as its own terminal call (no loops, no pipes such as | tail), so every run is recorded."
         )
 
     def _ensure_base_tree(self) -> None:
@@ -281,11 +281,13 @@ class Engine:
             output, code = str(result), None
         src, _prot = self.source_changes()
         lg = inc.ledger()
-        run = lg.record(output, code, changed=bool(src))
-        if run is None:
-            return
-        run.full_suite = len(run.results) > len(inc.test_ids)
-        inc.runs.append(asdict(run))
+        sessions = ledger.split_sessions(output)
+        for chunk in sessions:
+            run = lg.record(chunk, code if len(sessions) == 1 else None, changed=bool(src))
+            if run is None:
+                continue
+            run.full_suite = len(run.results) > len(inc.test_ids)
+            inc.runs.append(asdict(run))
         if inc.ledger().verdict()[0]:
             inc.status = "ready"
         self.save()

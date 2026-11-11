@@ -22,6 +22,17 @@ _RESULT = re.compile(r"^(PASSED|FAILED|ERROR|SKIPPED|XFAIL|XPASS) (\S+?\.py(?:::
 PASSES_NEEDED = 3
 
 
+_SESSION = re.compile(r"^=+ test session starts =+$", re.M)
+
+
+def split_sessions(output: str) -> list[str]:
+    """One terminal call can hold several pytest sessions (a loop, `a && b`). Split them so each counts once."""
+    starts = [m.start() for m in _SESSION.finditer(output)]
+    if len(starts) <= 1:
+        return [output]
+    return [output[a:b] for a, b in zip(starts, starts[1:] + [len(output)])]
+
+
 def parse_results(output: str) -> dict[str, str]:
     """Map test id -> outcome from pytest -rA output."""
     res: dict[str, str] = {}

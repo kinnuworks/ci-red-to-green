@@ -61,3 +61,14 @@ def test_regression_gate():
 
 def test_suite_not_run_is_reported():
     assert lg_with((FAIL, False)).summary()["suite"] == "not run"
+
+
+def test_several_sessions_in_one_output_count_separately():
+    one = "============================= test session starts ==============================\n" + PASS + "1 passed\n"
+    chunks = ledger.split_sessions("$ for i in 1 2 3\n" + one * 3)
+    assert len(chunks) == 3
+    lg = ledger.Ledger([T])
+    lg.record(FAIL, 1, False)
+    for c in chunks:
+        lg.record(c, None, True)
+    assert lg.passes_after(T) == 3 and lg.verdict()[0]
