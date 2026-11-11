@@ -11,6 +11,7 @@ It needs Hermes because the proof comes from Hermes's own terminal results, the 
 Site, with a live simulator of the gate: https://kinnuworks.github.io/ci-red-to-green/
 Why you can trust the fix: [How the proof works](docs/how-the-proof-works.md)
 On a real project: [8 of 8 real humanize regressions](docs/eval.md) (replayed on a fork, 878-test suite; the last two on history-free branches with plain commit titles) ended in a proven, one-file PR that went green on humanize's own CI.
+Live, outside the eval: it is working on a real red build on [RapidFuzz](docs/eval.md#outside-the-eval-a-live-red-build-on-rapidfuzz-in-progress-at-submission) (4.2k stars, main red since 9 November); in progress at submission.
 A real run, in public: [PR #4](https://github.com/kinnuworks/datekit-demo/pull/4) was opened by the plugin after a commit broke five tests. Its table shows each test passed at the last green commit, failed twice before the fix and passed three times after; it holds one source file, and GitHub's checks passed about five minutes after the red run. Earlier runs: [#1](https://github.com/kinnuworks/datekit-demo/pull/1), [#2](https://github.com/kinnuworks/datekit-demo/pull/2), [#3](https://github.com/kinnuworks/datekit-demo/pull/3).
 
 ## Try it in 30 seconds, no token needed

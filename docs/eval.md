@@ -42,6 +42,17 @@ Replay 7 found the bug and finished on 0.2.3, so one more clean replay ran entir
 
 The agent restored whole-number formatting in one file, with a comment on why the translation catalogs need `%d`. The card: each of the 11 tests passed at the last green commit, failed 2/2 before the fix, passed 3/3 after; the full suite went from 11 failed, 867 passed to 878 passed. [PR #8](https://github.com/kinnuworks/humanize/pull/8) passed every Python version of humanize's CI, 8.5 minutes after the red run the plugin alerted on. That was a second run of the red commit: the first one finished before I started the watch, and the plugin only alerts on runs that finish while it watches. Counted from the first red run, it took about 16 minutes. No plugin change was needed.
 
+## Outside the eval: a live red build on RapidFuzz (in progress at submission)
+
+The replays above are known bugs. This one is not: [RapidFuzz](https://github.com/rapidfuzz/RapidFuzz)'s main branch has been red since a commit on 9 November ([its failing run](https://github.com/rapidfuzz/RapidFuzz/actions/runs/42704858500)), and no open PR fixes it.
+
+What has happened so far, on a fork with the same commit:
+- The fork's CI went red on the same commit ([run](https://github.com/kinnuworks/RapidFuzz/actions/runs/43102066086)).
+- ci-red-to-green's alert named the failing test, `tests/distance/test_distance.py::test_score_cutoff_equal_to_score[scorer9]`. A second failing workflow had no pytest failure in its log, and the plugin said so instead of guessing.
+- After `fix`, Hermes identified the scorer (`Prefix`) and started building RapidFuzz's C++ extension to reproduce it. The likely cause: the pure-Python `Prefix` normalized distance computes `1.0 - similarity`, which differs from the C++ result in the last bit, and the new test checks that both agree at the cutoff.
+
+The proof wasn't finished when submissions closed. Its result, and the PR to RapidFuzz if the proof passes, will be added here.
+
 ## Summary
 
 8 of 8 replays ended in a proven PR that changed one source file and went green on humanize's own CI. None touched a test.
