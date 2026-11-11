@@ -102,10 +102,21 @@ class GitHub:
                              {"content": base64.b64encode(content).decode(), "encoding": "base64"})
             tree.append({"path": path, "mode": "100644", "type": "blob", "sha": blob["sha"]})
         new_tree = self._req("POST", f"/repos/{self.repo}/git/trees", {"base_tree": base["tree"]["sha"], "tree": tree})
-        c = self._req("POST", f"/repos/{self.repo}/git/commits",
-                      {"message": message, "tree": new_tree["sha"], "parents": [base_sha]})
+        body = {"message": message, "tree": new_tree["sha"], "parents": [base_sha]}
+        who = self.noreply_identity()
+        if who:
+            body["author"] = body["committer"] = who
+        c = self._req("POST", f"/repos/{self.repo}/git/commits", body)
         self._req("POST", f"/repos/{self.repo}/git/refs", {"ref": f"refs/heads/{branch}", "sha": c["sha"]})
         return c["sha"]
+
+    def noreply_identity(self) -> dict | None:
+        """The token owner's GitHub no-reply address, so fix commits never expose a private email."""
+        try:
+            me = self._req("GET", "/user")
+            return {"name": me["login"], "email": f"{me['id']}+{me['login']}@users.noreply.github.com"}
+        except (GitHubError, KeyError, OSError):
+            return None
 
     def open_pr(self, head: str, base: str, title: str, body: str) -> dict:
         return self._req("POST", f"/repos/{self.repo}/pulls", {"title": title, "head": head, "base": base, "body": body})
