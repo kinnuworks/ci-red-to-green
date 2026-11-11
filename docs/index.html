@@ -317,7 +317,7 @@ kbd{display:inline-grid;place-items:center;min-width:26px;height:26px;padding:0 
       <a class="btn btn-halo btn-lg" href="#install">Install in Hermes</a>
       <a class="btn btn-outline btn-lg" href="#proof">See what it checks</a>
     </div>
-    <p class="trust"><span><a href="https://github.com/kinnuworks/datekit-demo/pull/1" style="text-decoration:underline;text-underline-offset:3px">See a real fix PR it opened</a></span><span>Free and open source</span><span>Python repos tested with pytest</span><span>Never merges, never pushes to your base branch</span></p>
+    <p class="trust"><span><a href="https://github.com/kinnuworks/datekit-demo/pull/2" style="text-decoration:underline;text-underline-offset:3px">See a real fix PR it opened</a></span><span>Free and open source</span><span>Python repos tested with pytest</span><span>Never merges, never pushes to your base branch</span></p>
 
     <div class="hero__visual bleed">
       <div class="stage hero-stage">
@@ -326,20 +326,20 @@ kbd{display:inline-grid;place-items:center;min-width:26px;height:26px;padding:0 
             <div class="phone__status"><span>9:41</span><span>●●● 5G</span></div>
             <div class="tg__head"><div class="tg__ava">HA</div><div><div class="tg__name">Hermes Agent</div><div class="tg__sub">bot</div></div></div>
             <div class="tg__msgs">
-              <div class="bub bub--in"><b>CI red on master:</b> <span class="m">tests/test_parse.py::test_days_in_month_leap</span><br><span class="red m">assert 28 == 29</span><br>run #2 · <span class="m">29b7210</span><br>Reply fix and I'll reproduce it and prove a fix before offering a PR.<span class="t">12:24</span></div>
-              <div class="bub bub--out">fix<span class="t">12:24</span></div>
-              <div class="bub bub--in">Fix for run #2 on master<br><span class="m">test_days_in_month_leap</span>: <span class="red">FAILED before the fix</span> · <span class="grn">PASSED after it 3/3 ✓</span><br>suite: no new failures<br>test files untouched<br>changed: modified <span class="m">datekit/parse.py</span><span class="t">12:27</span></div>
+              <div class="bub bub--in"><b>CI red on main:</b> <span class="m">tests/test_parse.py::test_days_in_month_leap</span><br><span class="red m">assert 28 == 29</span><br>run #7 · <span class="m">0daaf7c</span><br>Reply fix and I'll reproduce it and prove a fix before offering a PR.<span class="t">1:38</span></div>
+              <div class="bub bub--out">fix<span class="t">1:38</span></div>
+              <div class="bub bub--in">Fix for run #7 on main<br><span class="m">test_days_in_month_leap</span>: <span class="red">FAILED before the fix</span> · <span class="grn">PASSED after it 3/3 ✓</span><br>suite: no new failures<br>test files untouched<br>changed: modified <span class="m">datekit/parse.py</span><span class="t">12:27</span></div>
               <div class="bub bub--in">Open the PR? It has source files only and never touches the base branch.<br>1. Open PR<br>2. Discard<span class="t">12:27</span></div>
               <div class="tg__btns"><span>1</span><span>2</span></div>
-              <div class="bub bub--in">Done. GitHub's CI is green on the fix: <span class="lnk">actions/runs/4297…</span><br>PR: <span class="lnk">datekit/pull/1</span> (not merged; that's yours)<span class="t">12:28</span></div>
+              <div class="bub bub--in">Done. GitHub's CI is green on the fix: <span class="lnk">datekit-demo/actions/runs/…</span><br>PR: <span class="lnk">datekit-demo/pull/2</span> (not merged; that's yours)<span class="t">12:28</span></div>
             </div>
           </div>
         </div>
         <div class="window gh" aria-hidden="true" style="align-self:center">
-          <div class="window__bar"><div class="lights"><i></i><i></i><i></i></div><span class="window__title">Pull request #1</span></div>
+          <div class="window__bar"><div class="lights"><i></i><i></i><i></i></div><span class="window__title">Pull request #2</span></div>
           <div class="gh__body">
-            <div class="gh__title">Fix test_days_in_month_leap (CI run #2)</div>
-            <div class="gh__meta"><span class="pill-open">Open</span><span>ci-fix/run-2 → master</span></div>
+            <div class="gh__title">Fix test_days_in_month_leap (red CI run #7)</div>
+            <div class="gh__meta"><span class="pill-open">Open</span><span>ci-fix/run-7 → main</span></div>
             <div class="gh__files"><div><span>1 file changed</span><span><span class="add">+2</span> <span class="del">−0</span></span></div><div><span>datekit/parse.py</span><span class="add">+2</span></div></div>
             <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M7.5 12.5l3 3 6-6.5"/></svg>All checks have passed · ci / test</div>
             <div class="proof" style="margin-top:14px">
@@ -399,8 +399,8 @@ tests/test_parse.py::test_add_months_clamps_to_month_end <span class="f">FAILED<
 tests/test_parse.py::test_add_months_across_year <span class="f">FAILED</span><br>
 tests/test_parse.py::test_add_months_negative <span class="f">FAILED</span><br>
 <span class="f">=== 3 failed, 4 passed in 0.31s ===</span><br><br>
-<span class="p">→ Telegram:</span> CI red on master: test_add_months_clamps_to_month_end (+2 more)<br>
-<span class="p">&nbsp;&nbsp;</span>ValueError: day is out of range for month · run #6
+<span class="p">→ Telegram:</span> CI red on main: test_add_months_clamps_to_month_end (+2 more)<br>
+<span class="p">&nbsp;&nbsp;</span>ValueError: day is out of range for month · run #2
         </div>
       </div>
     </div>
@@ -414,7 +414,7 @@ tests/test_parse.py::test_add_months_negative <span class="f">FAILED</span><br>
       </div>
       <div class="stage stage--soft">
         <div class="window" aria-hidden="true">
-          <div class="window__bar"><div class="lights"><i></i><i></i><i></i></div><span class="window__title">/ci · run #6 on master</span></div>
+          <div class="window__bar"><div class="lights"><i></i><i></i><i></i></div><span class="window__title">/ci · run #2 on main</span></div>
           <div class="proof" style="padding:8px 20px 18px">
             <div class="proof__row"><span class="proof__id">test_add_months_clamps_to_month_end</span><span style="display:flex;gap:6px;align-items:center"><span class="tagx tagx--fail">FAILED before</span><span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i></span></span></div>
             <div class="proof__row"><span class="proof__id">test_add_months_across_year</span><span style="display:flex;gap:6px;align-items:center"><span class="tagx tagx--fail">FAILED before</span><span class="dots"><i class="on"></i><i class="on"></i><i class="on"></i></span></span></div>
