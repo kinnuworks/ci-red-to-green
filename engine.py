@@ -510,7 +510,9 @@ class Engine:
         if re.search(r"\bgit\b[^;&|]*\bpush\b|\bgh\s+pr\b", cmd):
             return "block"
         if runs_repo_code(cmd) and not inc.approved_repro:
-            return "approve"  # until a repo-code command has actually run (see observe), keep asking
+            inc.approved_repro = True  # observe() undoes this if the user denies or the prompt times out
+            self.save()
+            return "approve"
         return None
 
     def observe(self, tool_name: str, args: dict, result: str) -> None:
@@ -520,13 +522,12 @@ class Engine:
             return
         cmd = args.get("command", "")
         rn = runners.get(inc.runner)
-        if not inc.approved_repro and self._in_worktree(cmd, args.get("workdir")) and runs_repo_code(cmd):
-            try:  # the user said yes once and it ran: later commands follow Hermes's own policy
-                if json.loads(result).get("exit_code") is not None:
-                    inc.approved_repro = True
-                    self.save()
-            except (ValueError, TypeError, AttributeError):
-                pass
+        if inc.approved_repro and self._in_worktree(cmd, args.get("workdir")) and runs_repo_code(cmd) \
+                and "BLOCKED:" in str(result)[:400]:
+            # Hermes refused it (denied, or the prompt timed out): ask again next time
+            inc.approved_repro = False
+            self.save()
+            return
         if not rn.is_cmd(cmd) or not self._in_worktree(cmd, args.get("workdir")):
             return
         try:

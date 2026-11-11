@@ -111,7 +111,9 @@ def test_full_loop(tmp_path):
     # first pytest run in the worktree is escalated to Hermes's approval prompt, once
     a = {"command": f"cd {eng.incident.worktree} && python -m pytest -rA {T}"}
     assert eng.needs_approval("terminal", a) == "approve"
-    assert eng.needs_approval("terminal", a) == "approve"  # keeps asking until a repo-code command has really run
+    # a denied or timed-out prompt comes back BLOCKED: the next command asks again
+    eng.observe("terminal", a, json.dumps({"output": "BLOCKED: Command timed out without user response.", "exit_code": None}))
+    assert eng.needs_approval("terminal", a) == "approve"
     assert eng.needs_approval("terminal", {"command": f"git -C {eng.incident.worktree} push"}) == "block"
 
     term(eng, "python -m pytest -rA " + T, f"FAILED {T} - AssertionError\n", 1)
