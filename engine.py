@@ -32,7 +32,7 @@ def git_blob_sha(data: bytes) -> str:
 # Commands that only read or fetch, and never run the repo's own code. Anything else in the
 # fix folder (pytest, pip install, python, make, tox...) counts as running the repo's code.
 _READ_ONLY = re.compile(
-    r"^(?:cd|ls|cat|head|tail|grep|rg|find|wc|pwd|echo|printf|sed|diff|tree|file|stat|true|test|\[|mkdir|which|command|type"
+    r"^(?:cd|ls|cat|head|tail|grep|rg|wc|pwd|echo|printf|diff|tree|file|stat|true|test|\[|mkdir|which|command|type"
     r"|git\s+(?:-C\s+\S+\s+)?(?:clone|status|diff|log|show|fetch|checkout|switch|rev-parse|branch|ls-files|blame|stash))(?=\s|$)"
 )
 
@@ -135,6 +135,8 @@ class Incident:
     opened_at: float = 0.0
     runner: str = "pytest"
     repo: str = ""
+    suspects_total: int = 0
+    ignored_runs: int = 0
 
     def ledger(self) -> ledger.Ledger:
         lg = ledger.Ledger(self.test_ids, parse=runners.get(self.runner).parse_results)
@@ -364,6 +366,7 @@ class Engine:
         out = [{"sha": c.get("sha", ""), "title": (c.get("commit", {}).get("message") or "").splitlines()[0][:100] if c.get("commit") else "",
                 "author": (c.get("author") or {}).get("login") or (c.get("commit", {}).get("author") or {}).get("name", "")}
                for c in commits]
+        self._suspects_total = len(out)
         return green["head_sha"], out[-5:]
 
     def _suspect_line(self, inc: Incident) -> str:
@@ -372,7 +375,7 @@ class Engine:
         if len(inc.suspects) == 1:
             c = inc.suspects[0]
             return f'Since the last green run: {c["sha"][:7]} "{c["title"]}"' + (f' by {c["author"]}' if c["author"] else "")
-        return f"Since the last green run ({inc.last_green[:7]}): {len(inc.suspects)} commits, newest {inc.suspects[-1]['sha'][:7]} \"{inc.suspects[-1]['title']}\""
+        return f"Since the last green run ({inc.last_green[:7]}): {max(inc.suspects_total, len(inc.suspects))} commits, newest {inc.suspects[-1]['sha'][:7]} \"{inc.suspects[-1]['title']}\""
 
     def _open_incident(self, gh: GitHub, run: dict, w: Watch) -> None:
         failure = logparse.Failure()
@@ -390,13 +393,14 @@ class Engine:
             self._post(f"CI red on {w.repo} @ {w.branch} (run #{run.get('run_number')}), but I couldn't find a failing pytest or go test in the log, so there's nothing I can reproduce. {run.get('html_url', '')}")
             return
         wt = str(self.data_dir / "worktrees" / str(run["id"]))
+        self._suspects_total = 0
         green, suspects = self._suspects(gh, run, w)
         self._archive()
         self.incident = Incident(
             run_id=run["id"], run_number=run.get("run_number", 0), run_url=run.get("html_url", ""),
             head_sha=run["head_sha"], branch=w.branch, repo=w.repo, test_ids=failure.test_ids,
             reasons=failure.reasons, command=runners.get(failure.runner).command(failure.test_ids), worktree=wt,
-            last_green=green, suspects=suspects, opened_at=self._clock(), runner=failure.runner,
+            last_green=green, suspects=suspects, suspects_total=self._suspects_total, opened_at=self._clock(), runner=failure.runner,
         )
         self.save()
         first = failure.test_ids[0]
@@ -443,7 +447,7 @@ class Engine:
             "the PR is built from source files only, so test edits are dropped and the fix would be refused.\n"
             f"5. After the fix, run {inc.command} three times, then the whole suite once ({rn.full_command}).\n"
             "6. Don't commit or push. Tell the user in one line what the cause was and to send /ci to see the proof and open the PR.\n"
-            f"{rn.flags_note}, and run each test command as its own terminal call (no loops, no pipes such as | tail), so every run is recorded."
+            f"{rn.flags_note}, and run each test command as its own terminal call, with only cd, source or variables before it and nothing after it (no ;, &&, loops or pipes such as | tail), so every run is recorded."
         )
 
     def _ensure_base_tree(self) -> None:
@@ -453,8 +457,11 @@ class Engine:
         inc.base_tree = self.gh().tree(inc.head_sha)
 
     def _in_worktree(self, command: str, workdir: str | None) -> bool:
-        wt = self.incident.worktree if self.incident else None
-        return bool(wt and ((workdir or "").startswith(wt) or wt in (command or "")))
+        wt = self.incident.worktree.rstrip("/") if self.incident else ""
+        if not wt:
+            return False
+        wd = (workdir or "").rstrip("/")
+        return wd == wt or wd.startswith(wt + "/") or bool(re.search(re.escape(wt) + r"(?:/|\s|['\"]|$)", command or ""))
 
     def source_changes(self) -> tuple[dict[str, str], dict[str, str]]:
         inc = self.incident
@@ -495,7 +502,12 @@ class Engine:
             output, code = body.get("output", ""), body.get("exit_code")
         except (ValueError, TypeError, AttributeError):
             output, code = str(result), None
-        src, _prot = self.source_changes()
+        src, prot = self.source_changes()
+        if prot:
+            # a run made while tests or test config were edited proves nothing, even if the edit is undone later
+            inc.ignored_runs += 1
+            self.save()
+            return
         lg = inc.ledger()
         sessions = rn.split_sessions(output)
         for chunk in sessions:
@@ -548,7 +560,8 @@ class Engine:
             reasons.append("no source change in the worktree")
         if prot:
             reasons.append("test or CI files changed: " + ", ".join(sorted(prot)))
-        return {"accepted": ok, "reasons": reasons, "source": src, "protected": prot, **{k: summ[k] for k in ("tests", "suite")}}
+        return {"accepted": ok, "reasons": reasons, "source": src, "protected": prot, "ignored_runs": inc.ignored_runs,
+                **{k: summ[k] for k in ("tests", "suite")}}
 
     def card_text(self) -> str:
         inc = self.incident
@@ -568,6 +581,8 @@ class Engine:
         if d:
             lines.append("")
             lines.append(d)
+        if p["ignored_runs"]:
+            lines.append(f"{p['ignored_runs']} run(s) made while test files were edited were not counted")
         if not p["accepted"]:
             lines.append("Not ready: " + "; ".join(p["reasons"]))
         return "\n".join(lines)
@@ -611,9 +626,10 @@ class Engine:
         return f"PR opened: {inc.pr_url}\nI'll tell you here when GitHub's CI finishes on it."
 
     def _follow_pr(self, gh: GitHub, inc: Incident) -> None:
-        runs = [r for r in gh.runs(head_sha=inc.pr_sha) if r.get("status") == "completed"]
-        if not runs:
-            return
+        every = gh.runs(head_sha=inc.pr_sha)
+        runs = [r for r in every if r.get("status") == "completed"]
+        if not runs or (len(runs) < len(every) and not any(r.get("conclusion") == "failure" for r in runs)):
+            return  # wait until every workflow on the fix has finished (a failure can be reported at once)
         if all(r.get("conclusion") == "success" for r in runs):
             inc.status, inc.pr_run_url = "done", runs[0].get("html_url", "")
             self.save()

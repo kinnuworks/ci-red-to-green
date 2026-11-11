@@ -19,7 +19,7 @@ hermes plugins install ci-red-to-green --enable
 
 Then send `/ci demo` in any chat with Hermes (or pick **CI red to green: Try the demo** from the Desktop palette) and reply `fix`.
 
-The demo is a trimmed copy of [humanize](https://github.com/python-humanize/humanize)'s file-size code with the real bug humanize fixed in its PR #329: `naturalsize(999999)` returns `1000.0 kB` instead of `1.0 MB`. The tests are humanize's own and the red CI log is pytest's real output on that code. Everything runs locally; Open PR writes the commit as a patch file instead of calling GitHub.
+The demo is a trimmed copy of [humanize](https://github.com/python-humanize/humanize)'s file-size code with the real bug humanize fixed in its PR #329: `naturalsize(999999)` returns `1000.0 kB` instead of `1.0 MB`. The tests are humanize's own, and the red "CI log" is pytest's real output on that code, recorded locally. Everything runs locally; Open PR writes the commit as a patch file instead of calling GitHub.
 
 ## Use it on your repo
 
@@ -39,8 +39,9 @@ Needs Hermes 0.23.1 or newer, and a repo whose Actions run pytest or `go test`.
 | Nothing else broke | the full suite run before and after: no test that passed before fails after |
 | Tests weren't touched | test files, `testdata`, `conftest.py`, pytest/tox/setup config and `.github` never go in the PR commit; a fix that edits them is refused |
 | Only your source goes in | the commit holds files changed since the red commit; files your `.gitignore` files match (nested ones and `!` lines included) stay out unless the repo tracks them |
-| Only real runs count | the command must invoke the test runner, and the output must carry the runner's own session header and summary; echoed text and Go's cached results are ignored |
-| GitHub agrees | after you open the PR, it follows the PR's own CI run and tells you when it's green |
+| Only real runs count | the terminal call must be the test command itself (only `cd`, `source` or variables before it, nothing after it, no pipes), only lines between the runner's own header and summary are read, and Go's cached results are ignored |
+| No test edits, even temporary | a run made while a test file or test config is edited never counts, even if the edit is undone later |
+| GitHub agrees | after you open the PR, it waits for every workflow on it and tells you when they are all green |
 
 The alert also names the commits that came in since the last green run, and the proof card shows the diff, so you can review the change before you tap Open PR. The plugin never pushes to your base branch and never merges.
 

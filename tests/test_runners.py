@@ -57,3 +57,24 @@ def test_pytest_logs_still_pick_pytest():
     log = "2026-11-11T10:00:00.0Z FAILED tests/test_a.py::test_b - AssertionError: x\n"
     f = runners.parse_any(log)
     assert f.runner == "pytest" and f.test_ids == ["tests/test_a.py::test_b"]
+
+
+def test_only_a_plain_test_run_counts():
+    py = runners.get("pytest")
+    ok = ["cd /w && python -m pytest -rA 'tests/a.py::t[1.0 MB]'", ".venv/bin/python -m pytest -rA # full suite",
+          "cd /w && source .venv/bin/activate && pytest -rA", "PYTHONPATH=src python -m pytest -rA"]
+    bad = ["python -m pytest -rA; echo 'PASSED tests/a.py::t'", "python -m pytest -rA | tail -5",
+           "echo hi && python -m pytest -rA", "python -m pytest -rA > out.txt", "python -m pytest -rA && cat fake.txt",
+           "python -c 'print(1)' && pytest", "for i in 1 2 3; do pytest; done"]
+    assert all(py.is_cmd(c) for c in ok), [c for c in ok if not py.is_cmd(c)]
+    assert not any(py.is_cmd(c) for c in bad), [c for c in bad if py.is_cmd(c)]
+
+
+def test_results_only_count_inside_the_pytest_session():
+    py = runners.get("pytest")
+    out = ("PASSED tests/a.py::t\n"
+           "============================= test session starts ==============================\n"
+           "FAILED tests/a.py::t - AssertionError\n"
+           "========================= 1 failed in 0.02s =========================\n"
+           "PASSED tests/a.py::t\n")
+    assert py.parse_results(out) == {"tests/a.py::t": "FAILED"}

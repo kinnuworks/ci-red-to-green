@@ -416,3 +416,42 @@ def test_a_go_incident_uses_go_test_end_to_end(tmp_path, monkeypatch):
     p = eng.proof()
     assert p["tests"]["example.com/demo/size::TestRollover"]["passes_after"] == 3
     assert "(go)" in eng.pr_body()
+
+
+def test_runs_with_edited_tests_never_count_and_pr_waits_for_every_workflow(tmp_path):
+    eng, posts = make(tmp_path)
+    eng.start_watch("o/r", "main")
+    FakeGH.state["runs"] = [red_run()]
+    eng.tick()
+    eng.fix_context()
+    write_worktree(eng, BASE)
+    for _ in range(2):
+        term(eng, "python -m pytest -rA " + T, f"FAILED {T}\n", 1)
+    write_worktree(eng, {"src/dates.py": b"def month(s):\n    return int(s[5:7])\n", "tests/test_dates.py": b"def test_parse_iso(): pass\n"})
+    for _ in range(3):
+        term(eng, "python -m pytest -rA " + T, f"PASSED {T}\n", 0)
+    write_worktree(eng, {"tests/test_dates.py": BASE["tests/test_dates.py"]})  # edit undone before /ci
+    p = eng.proof()
+    assert p["tests"][T]["passes_after"] == 0 and not p["accepted"]
+    assert p["ignored_runs"] == 3 and "were not counted" in eng.card_text()
+    for _ in range(3):
+        term(eng, "python -m pytest -rA " + T, f"PASSED {T}\n", 0)
+    assert eng.incident.status == "ready"
+    assert eng.open_pr().startswith("PR opened"), eng.proof()["reasons"]
+    FakeGH.state["pr_runs"] = [{"status": "completed", "conclusion": "success", "html_url": "u1"}, {"status": "in_progress"}]
+    eng.tick()
+    assert eng.incident.status == "pr_open"  # one workflow still running
+    FakeGH.state["pr_runs"][1] = {"status": "completed", "conclusion": "success", "html_url": "u2"}
+    eng.tick()
+    assert eng.incident.status == "done"
+
+
+def test_worktree_match_respects_path_boundaries(tmp_path):
+    eng, _ = make(tmp_path)
+    eng.start_watch("o/r", "main")
+    FakeGH.state["runs"] = [red_run()]
+    eng.tick()
+    wt = eng.incident.worktree
+    assert eng._in_worktree(f"cd {wt} && pytest", None)
+    assert not eng._in_worktree(f"cd {wt}0 && pytest", None)
+    assert not eng._in_worktree("pytest", wt + "0")

@@ -506,11 +506,11 @@ tests/test_parse.py::test_add_months_negative <span class="f">FAILED</span><br>
     </div>
     <div class="try">
       <div class="card ctl">
-        <div><div class="lbl">Before the fix</div>
-          <div class="segmented" role="group" aria-label="Result before the fix">
-            <button type="button" data-before="FAILED" aria-pressed="true">FAILED</button>
-            <button type="button" data-before="PASSED" aria-pressed="false">PASSED</button>
-            <button type="button" data-before="none" aria-pressed="false">Not run</button>
+        <div><div class="lbl">Runs before the fix</div>
+          <div class="segmented" role="group" aria-label="Results before the fix">
+            <button type="button" data-before="FAILED2" aria-pressed="true">Failed twice</button>
+            <button type="button" data-before="FAILED1" aria-pressed="false">Failed once</button>
+            <button type="button" data-before="PASSED" aria-pressed="false">Passed once</button>
           </div></div>
         <div><div class="lbl">Passing runs in a row after the fix: <span id="passN" class="t-mono">3</span></div>
           <input class="range" id="passes" type="range" min="0" max="5" value="3" aria-label="Passing runs after the fix"></div>
@@ -595,19 +595,20 @@ const nav=document.querySelector('.nav'),hero=document.querySelector('.hero--col
 if(nav&&hero)new IntersectionObserver(([e])=>nav.classList.toggle('nav--on-color',e.isIntersecting),{rootMargin:'-40px 0px -90% 0px'}).observe(hero);
 
 // The gate: same rules as ledger.py and engine.proof()
-const NEEDED=3; let before='FAILED';
+const NEEDED=3; let before='FAILED2';
 const $=id=>document.getElementById(id);
 function render(){
   const passes=+$('passes').value, edit=$('testEdit').checked, nf=$('newFail').checked, src=$('src').checked;
   $('passN').textContent=passes;
   const tb=$('tagBefore');
-  tb.className='tagx '+(before==='FAILED'?'tagx--fail':'tagx--dim');
-  tb.textContent=before==='FAILED'?'FAILED before':before==='PASSED'?'passed before':'not run before';
+  tb.className='tagx '+(before==='PASSED'?'tagx--dim':'tagx--fail');
+  tb.textContent=before==='FAILED2'?'FAILED before 2/2':before==='FAILED1'?'FAILED before 1/2':'flaky';
   [...$('dots').children].forEach((d,i)=>d.classList.toggle('on',i<Math.min(passes,NEEDED)));
   $('tagSuite').className='tagx '+(nf?'tagx--fail':'tagx--pass'); $('tagSuite').textContent=nf?'1 new failure':'no new failures';
   $('tagTests').className='tagx '+(edit?'tagx--fail':'tagx--pass'); $('tagTests').textContent=edit?'changed':'untouched';
   const why=[];
-  if(before!=='FAILED')why.push('never seen failing before the change');
+  if(before==='PASSED')why.push('passed before any change, so it is flaky, not broken');
+  if(before==='FAILED1')why.push('1/2 failing runs before the change');
   if(passes<NEEDED)why.push(passes+'/'+NEEDED+' passing runs after the change');
   if(nf)why.push('new failures in the full suite');
   if(edit)why.push('test or CI files changed');

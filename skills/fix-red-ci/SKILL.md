@@ -1,11 +1,11 @@
 ---
 name: fix-red-ci
-description: Fix a failing pytest test so ci-red-to-green can prove it and offer a PR. Load when the user replies "fix" to a red CI alert, or asks why the proof card isn't ready.
+description: Fix a failing pytest or go test so ci-red-to-green can prove it and offer a PR. Load when the user replies "fix" to a red CI alert, or asks why the proof card isn't ready.
 ---
 
 # Fix red CI with proof
 
-ci-red-to-green records pytest's own output from your terminal calls and offers a pull request
+ci-red-to-green records the test runner's own output (pytest or go test) from your terminal calls and offers a pull request
 only when the record shows all of this:
 
 | Check | What counts |
@@ -14,21 +14,20 @@ only when the record shows all of this:
 | Not flaky | the test never PASSED before the change (one pass marks it flaky and blocks the PR) |
 | Fixed | each test PASSED in 3 runs in a row after the change |
 | Nothing else broke | a full-suite run before and after; no test that passed before fails after |
-| Tests untouched | tests, conftest.py, pytest/tox/setup config and .github are never put in the PR |
+| Tests untouched | tests, testdata, conftest.py, pytest/tox/setup config and .github are never put in the PR; runs made while they are edited don't count |
 
 ## How to work
 
 1. Work only in the fix folder the alert names. Clone it there if it's missing; never in the user's checkout.
 2. Install the project the way its CI does. The first command that runs the repo's code asks the user for approval.
-3. Reproduce first: run the exact pytest command from the alert twice, each as its own terminal call.
-4. Run the full suite once (`python -m pytest -rA`) before changing anything.
+3. Reproduce first: run the exact test command from the alert twice, each as its own terminal call.
+4. Run the full suite once (`python -m pytest -rA`, or `go test -v -count=1 ./...`) before changing anything.
 5. If the alert lists commits since the last green run, read their diff first. The cause is usually there.
 6. Fix the source. Never edit tests to make them pass; a fix that needs a test change is refused.
 7. Run the failing tests three times, then the full suite once.
 8. Don't commit or push (pushes from the fix folder are blocked). Tell the user the cause in one line and to send `/ci` (or use the CI pane in Desktop) to see the proof and open the PR.
 
-Always pass `-rA`, and run each pytest command as its own terminal call: no loops, no pipes such as `| tail`.
-Only real pytest runs count; text that merely looks like pytest output is ignored.
+Always pass `-rA` to pytest (`-v -count=1` to go test), and run each test command as its own terminal call: only `cd`, `source` or variables may come before it, and nothing after it (no `;`, `&&`, loops or pipes such as `| tail`). Other calls are not recorded, and text that merely looks like test output is ignored.
 
 ## When the card says "Not ready"
 

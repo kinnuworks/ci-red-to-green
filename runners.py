@@ -13,13 +13,40 @@ import shlex
 from . import ledger, logparse
 
 
+# Before the test command itself, only these may run in the same terminal call: changing
+# directory, activating a virtualenv, setting variables. Nothing may run after it, and no pipes,
+# so nothing else can print lines that look like results.
+_PREFIX_OK = re.compile(r"^(?:cd\s|source\s|\.\s|export\s|[A-Za-z_][A-Za-z0-9_]*=\S*$)")
+
+
+def _only_runs(cmd: str, invocation: re.Pattern) -> bool:
+    # quoted arguments (test ids, a -run regex) may hold | ; > and #, so judge the shape without them
+    body = re.sub(r"'[^']*'|\"[^\"]*\"", "Q", cmd or "").split(" #", 1)[0].strip()
+    if "|" in body.replace("||", "") or ">" in body or "`" in body or "$(" in body:
+        return False
+    parts = [p.strip() for p in re.split(r"&&|\|\||;", body) if p.strip()]
+    last = re.sub(r"^(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)+", "", parts[-1]) if parts else ""
+    if not parts or not invocation.match(last):
+        return False
+    return all(_PREFIX_OK.match(p) for p in parts[:-1])
+
+
+def _between(text: str, start: re.Pattern, end: re.Pattern) -> str:
+    """The part of the output from the runner's own header to its own closing line."""
+    m = start.search(text)
+    ends = list(end.finditer(text))
+    if not m or not ends:
+        return text
+    return text[m.start(): ends[-1].end()]
+
+
 class Pytest:
     name = "pytest"
     full_command = "python -m pytest -rA"
     install_hint = "for example python -m pip install -e . pytest"
     flags_note = "Always pass -rA to pytest"
     # The command must actually invoke pytest (optionally after cd/&&), not just mention it.
-    _CMD = re.compile(r"(?:^|&&|;|\|\|)\s*(?:\S*python\S*\s+-m\s+pytest|\S*/?pytest)(?:\s|$)")
+    _CMD = re.compile(r"(?:\S*python\S*\s+-m\s+pytest|\S*/?pytest)(?:\s|$)")
 
     def parse_log(self, text: str) -> logparse.Failure:
         return logparse.parse_log(text)
@@ -28,7 +55,7 @@ class Pytest:
         return f"python -m pytest -rA {' '.join(shlex.quote(t) for t in ids)}".strip()
 
     def is_cmd(self, cmd: str) -> bool:
-        return bool(self._CMD.search(cmd or ""))
+        return _only_runs(cmd, self._CMD)
 
     def split_sessions(self, output: str) -> list[str]:
         return ledger.split_sessions(output)
@@ -37,7 +64,7 @@ class Pytest:
         return ledger.is_real_session(chunk)
 
     def parse_results(self, output: str) -> dict[str, str]:
-        return ledger.parse_results(output)
+        return ledger.parse_results(_between(output, ledger._SESSION, ledger._SUMMARY))
 
 
 # go test -v: "=== RUN   TestX", "--- FAIL: TestX (0.00s)", "    x_test.go:12: message",
@@ -71,7 +98,7 @@ class GoTest:
     full_command = "go test -v -count=1 ./..."
     install_hint = "Go modules download on the first run"
     flags_note = "Always pass -v -count=1 to go test"
-    _CMD = re.compile(r"(?:^|&&|;|\|\|)\s*go\s+test(?:\s|$)")
+    _CMD = re.compile(r"go\s+test(?:\s|$)")
 
     def parse_log(self, text: str) -> logparse.Failure:
         f = logparse.Failure()
@@ -100,7 +127,7 @@ class GoTest:
         return f"go test -v -count=1 -run {shlex.quote('^(' + '|'.join(tests) + ')$')} {' '.join(pkgs)}"
 
     def is_cmd(self, cmd: str) -> bool:
-        return bool(self._CMD.search(cmd or ""))
+        return _only_runs(cmd, self._CMD)
 
     def split_sessions(self, output: str) -> list[str]:
         return [output]  # one go test call reports every package it ran
@@ -110,7 +137,9 @@ class GoTest:
         return bool(_GO_PKG_TIMED.search("\n".join(logparse.clean(x) for x in chunk.splitlines())))
 
     def parse_results(self, output: str) -> dict[str, str]:
-        return {f"{pkg}::{test}": outcome for pkg, test, outcome in _go_scan(output)}
+        ends = list(_GO_PKG_TIMED.finditer(output))
+        text = output[: ends[-1].end()] if ends else output
+        return {f"{pkg}::{test}": outcome for pkg, test, outcome in _go_scan(text)}
 
 
 RUNNERS = {r.name: r for r in (Pytest(), GoTest())}

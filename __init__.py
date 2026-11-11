@@ -131,8 +131,8 @@ def register(ctx):
         category="work",
         schedule_template="{minute} {hour} * * 1-5",
         prompt_template=(
-            "Look at the GitHub Actions runs on {branch} of {repo} from the last 24 hours. "
-            "List each red run with its failing pytest tests, and say whether an open pull request "
+            "Using whatever GitHub access you have (the gh CLI or a GitHub tool), look at the GitHub Actions runs on {branch} of {repo} from the last 24 hours; if you have none, say so and stop. "
+            "List each red run with its failing tests, and say whether an open pull request "
             "from a ci-fix/ branch already addresses it. If anything is red and unfixed, say so first "
             "and suggest sending /ci watch {repo} {branch} so ci-red-to-green can prove a fix."
         ),
