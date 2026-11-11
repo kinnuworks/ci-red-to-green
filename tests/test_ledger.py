@@ -106,3 +106,11 @@ def test_results_with_spaced_params():
         "tests/test_filesize.py::test_naturalsize[test_args31-1.0 MB]": "PASSED",
         "tests/test_filesize.py::test_naturalsize[test_args32-1.0 GB]": "FAILED",
     }
+
+
+def test_results_with_nested_brackets():
+    out = "PASSED tests/test_number.py::test_metric[[9999]-10.0 k]\nFAILED tests/test_number.py::test_metric[[99999]-100 k] - AssertionError: x\n"
+    assert ledger.parse_results(out) == {
+        "tests/test_number.py::test_metric[[9999]-10.0 k]": "PASSED",
+        "tests/test_number.py::test_metric[[99999]-100 k]": "FAILED",
+    }

@@ -55,3 +55,16 @@ def test_parametrized_ids_with_spaces():
         "python -m pytest -rA 'tests/test_filesize.py::test_naturalsize[test_args31-1.0 MB]'"
         " 'tests/test_filesize.py::test_naturalsize[test_args32-1.0 GB]'"
     )
+
+
+def test_nested_brackets_in_parametrized_ids():
+    # humanize's real CI output for test_metric (FORCE_COLOR on, as in its workflow)
+    log = (
+        "2026-11-11T15:28:54.9422262Z \x1b[31mFAILED\x1b[0m tests/test_number.py::\x1b[1mtest_metric[[9999]-10.0 k]\x1b[0m"
+        " - AssertionError: assert '10.00 k' == '10.0 k'\n"
+        "2026-11-11T15:28:54.9424141Z \x1b[31mFAILED\x1b[0m tests/test_number.py::\x1b[1mtest_metric[[9.999, '', 2]-10]\x1b[0m"
+        " - AssertionError: assert '10.0' == '10'\n"
+    )
+    f = logparse.parse_log(log)
+    assert f.test_ids == ["tests/test_number.py::test_metric[[9999]-10.0 k]", "tests/test_number.py::test_metric[[9.999, '', 2]-10]"]
+    assert f.reasons[f.test_ids[0]] == "AssertionError: assert '10.00 k' == '10.0 k'"

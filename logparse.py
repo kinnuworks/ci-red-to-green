@@ -15,7 +15,9 @@ _TS = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z ")
 _ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 # pytest's short summary: "FAILED tests/test_x.py::test_y - AssertionError: ..."
 # A test id may carry parameters in brackets, and those can contain spaces: "test_x[1.0 MB]".
-TEST_ID = r"[^\s\[]+?\.py(?:::[^\s\[]+(?:\[[^\]]*\])?)?"
+# Parameters can nest brackets and hold spaces ("test_metric[[9999]-10.0 k]"): match lazily up to a "]"
+# that ends the id, which the caller pins with " - reason" or end of line.
+TEST_ID = r"[^\s\[]+?\.py(?:::[^\s\[]+(?:\[.*?\])?)?"
 _FAILED = re.compile(r"^(?:FAILED|ERROR) (?P<id>" + TEST_ID + r")(?: - (?P<why>.*))?$")
 _SUMMARY = re.compile(r"=+ .*\b(\d+) failed\b.*=+")
 
