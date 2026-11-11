@@ -371,6 +371,21 @@ class Engine:
             self.save()
             self._post(f"GitHub's CI is still red on the fix PR: {inc.pr_run_url}\nThe local proof didn't hold on CI. Reply fix to try again from the latest commit.")
 
+    def snapshot(self) -> dict:
+        """Everything the Desktop pane shows, as plain JSON."""
+        inc = self.incident
+        out: dict = {"watch": {"repo": self.watch.repo, "branch": self.watch.branch} if self.watch else None, "watching": self.thread_alive(), "incident": None}
+        if inc and inc.status != "discarded":
+            p = self.proof() if inc.status in ("fixing", "ready") else None
+            out["incident"] = {
+                "status": inc.status, "run_number": inc.run_number, "run_url": inc.run_url, "branch": inc.branch,
+                "sha": inc.head_sha[:7], "tests": inc.test_ids, "reasons": inc.reasons,
+                "proof": p and {"accepted": p["accepted"], "reasons": p["reasons"], "tests": p["tests"], "suite": p["suite"],
+                                  "source": p["source"], "protected": p["protected"], "needed": ledger.PASSES_NEEDED},
+                "pr_url": inc.pr_url, "pr_run_url": inc.pr_run_url,
+            }
+        return out
+
     def discard(self) -> str:
         if self.incident:
             self.incident.status = "discarded"

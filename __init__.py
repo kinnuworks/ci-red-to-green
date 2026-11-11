@@ -11,6 +11,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# The engine for this gateway process; the Desktop backend (dashboard/plugin_api.py) uses the same one.
+_ENGINE = None
+
 TOKEN_ENV = "CI_RED_TO_GREEN_GITHUB_TOKEN"
 USAGE = (
     "/ci watch owner/repo [branch]  start watching a branch\n"
@@ -32,7 +35,9 @@ def register(ctx):
 
     from .engine import Engine
 
+    global _ENGINE
     engine = Engine(plugin_data_dir("ci-red-to-green"), token_fn=_token, post=lambda text: ctx.post_message(text))
+    _ENGINE = engine
 
     def ci(raw_args: str, **_kw) -> str:
         args = (raw_args or "").split()
