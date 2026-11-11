@@ -98,7 +98,7 @@ def test_full_loop(tmp_path):
     assert p["accepted"], p["reasons"]
     assert p["suite"] == "no new failures" and p["source"] == {"src/dates.py": "modified"}
     card = eng.card_text()
-    assert "FAILED before" in card and "4x PASSED after (needs 3)" in card and "modified src/dates.py" in card and "test files untouched" in card
+    assert "FAILED before the fix" in card and "PASSED after it 3/3 ✓" in card and "modified src/dates.py" in card and "test files untouched" in card
 
     out = eng.open_pr()
     assert out.startswith("PR opened: https://github.com/o/r/pull/1")

@@ -314,7 +314,7 @@ class Engine:
         p = self.proof()
         lines = [f"Fix for run #{inc.run_number} on {inc.branch}"]
         for t, s in p["tests"].items():
-            lines.append(f"{t}: {'FAILED before' if s['failed_before'] else 'not seen failing'} · {s['passes_after']}x PASSED after (needs {ledger.PASSES_NEEDED})")
+            lines.append(f"{t}: {'FAILED before the fix' if s['failed_before'] else 'never seen failing before the fix'} · PASSED after it {min(s['passes_after'], ledger.PASSES_NEEDED)}/{ledger.PASSES_NEEDED} {'✓' if s['passes_after'] >= ledger.PASSES_NEEDED else ''}".rstrip())
         lines.append(f"suite: {p['suite']}")
         lines.append("test files untouched" if not p["protected"] else "test files changed: " + ", ".join(sorted(p["protected"])))
         lines.append("changed: " + (", ".join(f"{k} {path}" for path, k in sorted(p["source"].items())) or "nothing"))
@@ -325,7 +325,7 @@ class Engine:
     def pr_body(self) -> str:
         inc = self.incident
         p = self.proof()
-        rows = "\n".join(f"| `{t}` | {'FAILED' if s['failed_before'] else '-'} | {s['passes_after']}x PASSED |" for t, s in p["tests"].items())
+        rows = "\n".join(f"| `{t}` | {'FAILED' if s['failed_before'] else '-'} | PASSED {min(s['passes_after'], ledger.PASSES_NEEDED)}/{ledger.PASSES_NEEDED} runs in a row |" for t, s in p["tests"].items())
         return (
             f"CI went red on `{inc.branch}` at {inc.head_sha[:7]} ([run #{inc.run_number}]({inc.run_url})).\n\n"
             "This fix was checked locally by Hermes before this PR was opened. The results below come from pytest's own output, recorded by the plugin, not from the model:\n\n"
