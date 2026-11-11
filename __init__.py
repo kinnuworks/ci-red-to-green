@@ -48,6 +48,10 @@ def register(ctx):
             bound = contextvars.copy_context()
             engine.start_thread(runner=lambda fn: bound.run(fn))
             return msg
+        if sub != "stop" and engine.watch and not engine.thread_alive():
+            # The watcher thread dies with the gateway; any /ci in this chat re-arms it here.
+            bound = contextvars.copy_context()
+            engine.start_thread(runner=lambda fn: bound.run(fn))
         if sub == "stop":
             engine.stop_thread()
             return "Stopped watching."
@@ -56,8 +60,8 @@ def register(ctx):
         ctx.post_message(engine.card_text())
         if not engine.proof()["accepted"]:
             return "No PR yet. Once the proof above is complete, send /ci again."
-        pick = ctx.ask_choice("Open the PR?", [
-            {"value": "open", "label": "Open PR", "description": "source files only; never pushes to the base branch"},
+        pick = ctx.ask_choice("Open the PR? It has source files only and never touches the base branch.", [
+            {"value": "open", "label": "Open PR"},
             {"value": "discard", "label": "Discard"},
         ])
         if pick == "open":

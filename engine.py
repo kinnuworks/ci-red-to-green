@@ -153,6 +153,9 @@ class Engine:
         self._thread = threading.Thread(target=target, name="ci-red-to-green", daemon=True)
         self._thread.start()
 
+    def thread_alive(self) -> bool:
+        return bool(self._thread and self._thread.is_alive() and not self._stop.is_set())
+
     def stop_thread(self) -> None:
         self._stop.set()
 
