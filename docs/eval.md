@@ -21,7 +21,7 @@ To see ci-red-to-green work on a real project instead of a toy repo, I replayed 
 | 5 | [#295](https://github.com/python-humanize/humanize/pull/295) `naturaldelta` truncates years | 2 | same | [PR #5](https://github.com/kinnuworks/humanize/pull/5) | `src/humanize/time.py` | green | 6 min |
 | 6 | [#392](https://github.com/python-humanize/humanize/pull/392) `intcomma` overflow on big ints | 2 | same | [PR #6](https://github.com/kinnuworks/humanize/pull/6) | `src/humanize/number.py` | green | 4.5 min |
 | 7 | [#297](https://github.com/python-humanize/humanize/pull/297) tz-aware `naturalday`/`naturaldate` (clean replay, below) | 1 | same | [PR #7](https://github.com/kinnuworks/humanize/pull/7) | `src/humanize/time.py` | green | 16 min |
-| 8 | [#26](https://github.com/python-humanize/humanize/commit/11e62ee) `naturalsize` prints float bytes below 1 kB (clean replay on 0.2.3, below) | 11 | same | [PR #8](https://github.com/kinnuworks/humanize/pull/8) | `src/humanize/filesize.py` | green | 8.5 min |
+| 8 | [11e62ee](https://github.com/python-humanize/humanize/commit/11e62ee) `naturalsize` prints float bytes below 1 kB (clean replay on 0.2.3, below) | 11 | same | [PR #8](https://github.com/kinnuworks/humanize/pull/8) | `src/humanize/filesize.py` | green | 8.5 min |
 
 ## A clean replay on the submitted version
 
