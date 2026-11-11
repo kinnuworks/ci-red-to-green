@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from typing import Callable
 
 from .logparse import TEST_ID
 
@@ -68,9 +69,10 @@ class Run:
 class Ledger:
     test_ids: list[str]
     runs: list[Run] = field(default_factory=list)
+    parse: Callable[[str], dict[str, str]] | None = field(default=None, repr=False, compare=False)
 
     def record(self, output: str, exit_code: int | None, changed: bool, full_suite: bool = False) -> Run | None:
-        results = parse_results(output)
+        results = (self.parse or parse_results)(output)
         if not results:
             return None
         run = Run(changed=changed, results=results, exit_code=exit_code, full_suite=full_suite)

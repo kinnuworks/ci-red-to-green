@@ -25,6 +25,7 @@ class Failure:
     test_ids: list[str] = field(default_factory=list)
     reasons: dict[str, str] = field(default_factory=dict)
     summary: str = ""
+    runner: str = "pytest"
 
     @property
     def command(self) -> str:

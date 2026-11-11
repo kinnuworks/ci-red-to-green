@@ -1,0 +1,17 @@
+=== RUN   TestHuman
+--- PASS: TestHuman (0.00s)
+=== RUN   TestRollover
+=== RUN   TestRollover/1.0_MB
+    size_test.go:16: Human(999999) = "1000.0 kB", want "1.0 MB"
+=== RUN   TestRollover/1.0_GB
+    size_test.go:16: Human(9.99999999e+08) = "1000.0 MB", want "1.0 GB"
+--- FAIL: TestRollover (0.00s)
+    --- FAIL: TestRollover/1.0_MB (0.00s)
+    --- FAIL: TestRollover/1.0_GB (0.00s)
+FAIL
+FAIL	example.com/demo/size	0.512s
+=== RUN   TestAdd
+--- PASS: TestAdd (0.00s)
+PASS
+ok  	example.com/demo/util	0.938s
+FAIL

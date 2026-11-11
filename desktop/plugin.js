@@ -117,7 +117,7 @@ function headline(inc, demo) {
     case 'alerted':
       return 'CI is red. Reply fix in any chat to start.'
     case 'fixing':
-      return 'Hermes is fixing it. The proof fills in as pytest runs.'
+      return 'Hermes is fixing it. The proof fills in as the tests run.'
     case 'ready':
       return demo ? 'The fix is proven. Open PR writes the commit as a patch.' : 'The fix is proven. Open the PR when you are ready.'
     case 'pr_open':
@@ -285,7 +285,7 @@ function Body({ ctx, wide }) {
           ? s.watching
             ? 'Watching. The next red run shows up here, in your chat and as a notification.'
             : 'Send any /ci command in chat to resume watching after a restart.'
-          : 'Watch a GitHub repo with pytest in Actions. When a run goes red, Hermes reproduces it, fixes the source and offers a PR only after pytest proves the fix.'
+          : 'Watch a GitHub repo whose Actions run pytest or go test. When a run goes red, Hermes reproduces it, fixes the source and offers a PR only after pytest proves the fix.'
       }, 'e')
     )
   }
@@ -314,7 +314,7 @@ function Body({ ctx, wide }) {
       }, 'hl')
     )
   }
-  parts.push(jsx('div', { style: { color: MUTED, fontSize: '0.6875rem', marginTop: 4 }, children: 'Results come from pytest output recorded by the plugin. The PR holds source files only.' }, 'f'))
+  parts.push(jsx('div', { style: { color: MUTED, fontSize: '0.6875rem', marginTop: 4 }, children: 'Results come from test output recorded by the plugin. The PR holds source files only.' }, 'f'))
   return jsx('div', { style: pad, children: parts })
 }
 

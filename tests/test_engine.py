@@ -188,7 +188,7 @@ def test_unreproducible_failure_says_so(tmp_path):
         eng.tick()
     finally:
         FakeGH.job_log = original
-    assert "couldn't find a failing pytest test" in posts[-1] and eng.incident is None
+    assert "couldn't find a failing pytest or go test" in posts[-1] and eng.incident is None
 
 
 def test_switching_repo_sets_aside_the_open_incident(tmp_path):
@@ -371,3 +371,29 @@ def test_snapshot_handles_nested_gitignore_and_negation(tmp_path):
     (root / "top.tmp").write_text("not ignored at the root\n")
     snap = E.blob_snapshot(str(root))
     assert set(snap) == {".gitignore", "pkg/.gitignore", "pkg/mod.py", "keep.log", "top.tmp"}
+
+
+def test_a_go_incident_uses_go_test_end_to_end(tmp_path, monkeypatch):
+    go_log = (Path(__file__).parent / "data" / "go-test.txt").read_text()
+    monkeypatch.setattr(FakeGH, "job_log", lambda self, job_id: go_log)
+    eng, posts = make(tmp_path)
+    eng.start_watch("o/r", "main")
+    FakeGH.state["runs"] = [red_run()]
+    eng.tick()
+    inc = eng.incident
+    assert inc.runner == "go" and inc.test_ids == ["example.com/demo/size::TestRollover"]
+    assert "go test -v -count=1 -run '^(TestRollover)$' example.com/demo/size" in eng.fix_context()
+    assert "go test -v -count=1 ./..." in eng.fix_context()
+    write_worktree(eng, BASE)
+    red = (Path(__file__).parent / "data" / "go-test-v.txt").read_text()
+    green = "=== RUN   TestRollover\n--- PASS: TestRollover (0.00s)\nPASS\nok  \texample.com/demo/size\t0.2s\n"
+    cmd = f"cd {inc.worktree} && {inc.command}"
+    for out, code in [(red, 1), (red, 1)]:
+        eng.observe("terminal", {"command": cmd}, json.dumps({"output": out, "exit_code": code}))
+    write_worktree(eng, {"src/dates.py": b"def month(s):\n    return int(s[5:7])\n"})
+    for _ in range(3):
+        eng.observe("terminal", {"command": cmd}, json.dumps({"output": green, "exit_code": 0}))
+    eng.observe("terminal", {"command": "echo go test"}, json.dumps({"output": green, "exit_code": 0}))
+    p = eng.proof()
+    assert p["tests"]["example.com/demo/size::TestRollover"]["passes_after"] == 3
+    assert "(go)" in eng.pr_body()

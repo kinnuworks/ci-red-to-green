@@ -19,12 +19,10 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from . import demo, guard, ledger, logparse
+from . import demo, guard, ledger, logparse, runners
 from .github import GitHub, GitHubError
 
 POLL_SECONDS = 30
-# The command must actually invoke pytest (optionally after cd/&&), not just mention it.
-_PYTEST_CMD = re.compile(r"(?:^|&&|;|\|\|)\s*(?:\S*python\S*\s+-m\s+pytest|\S*/?pytest)(?:\s|$)")
 
 
 def git_blob_sha(data: bytes) -> str:
@@ -135,9 +133,10 @@ class Incident:
     last_green: str = ""  # head sha of the last green run before this one
     suspects: list[dict] = field(default_factory=list)  # commits since then: sha, title, author
     opened_at: float = 0.0
+    runner: str = "pytest"
 
     def ledger(self) -> ledger.Ledger:
-        lg = ledger.Ledger(self.test_ids)
+        lg = ledger.Ledger(self.test_ids, parse=runners.get(self.runner).parse_results)
         for r in self.runs:
             lg.runs.append(ledger.Run(**r))
         return lg
@@ -323,13 +322,17 @@ class Engine:
     def _open_incident(self, gh: GitHub, run: dict) -> None:
         failure = logparse.Failure()
         for job in gh.failed_jobs(run["id"]):
-            f = logparse.parse_log(gh.job_log(job["id"]))
+            f = runners.parse_any(gh.job_log(job["id"]))
+            if f and not failure:
+                failure.runner = f.runner
+            if f.runner != failure.runner:
+                continue  # one runner per incident
             for t in f.test_ids:
                 if t not in failure.test_ids:
                     failure.test_ids.append(t)
                     failure.reasons[t] = f.reasons.get(t, "")
         if not failure:
-            self._post(f"CI red on {self.watch.branch} (run #{run.get('run_number')}), but I couldn't find a failing pytest test in the log, so there's nothing I can reproduce. {run.get('html_url', '')}")
+            self._post(f"CI red on {self.watch.branch} (run #{run.get('run_number')}), but I couldn't find a failing pytest or go test in the log, so there's nothing I can reproduce. {run.get('html_url', '')}")
             return
         wt = str(self.data_dir / "worktrees" / str(run["id"]))
         green, suspects = self._suspects(gh, run)
@@ -337,8 +340,8 @@ class Engine:
         self.incident = Incident(
             run_id=run["id"], run_number=run.get("run_number", 0), run_url=run.get("html_url", ""),
             head_sha=run["head_sha"], branch=self.watch.branch, test_ids=failure.test_ids,
-            reasons=failure.reasons, command=failure.command, worktree=wt,
-            last_green=green, suspects=suspects, opened_at=self._clock(),
+            reasons=failure.reasons, command=runners.get(failure.runner).command(failure.test_ids), worktree=wt,
+            last_green=green, suspects=suspects, opened_at=self._clock(), runner=failure.runner,
         )
         self.save()
         first = failure.test_ids[0]
@@ -370,8 +373,9 @@ class Engine:
             listing = "\n".join(f"  - {c['sha'][:7]} {c['title']}" for c in inc.suspects)
             clue = (f"The last green commit was {inc.last_green[:7]}. These commits came in since, so the cause is most likely in one of them:\n{listing}\n"
                     f"Read what they changed first: git -C {inc.worktree} diff {inc.last_green} {inc.head_sha} -- . ':(exclude)tests'\n\n")
+        rn = runners.get(inc.runner)
         install = ("2. Nothing to install beyond pytest. " if self.watch.demo else
-                   f"2. In {inc.worktree}, install the project the way its CI does (for example python -m pip install -e . pytest), then ")
+                   f"2. In {inc.worktree}, install the project the way its CI does ({rn.install_hint}), then ")
         return (
             "[ci-red-to-green] The user asked you to fix a red CI run.\n"
             f"Repo {self.watch.repo}, branch {inc.branch}, commit {inc.head_sha}, run #{inc.run_number}.\n"
@@ -379,12 +383,12 @@ class Engine:
             "Do exactly this, using the terminal tool:\n"
             f"1. If {inc.worktree} doesn't exist yet: git clone https://github.com/{self.watch.repo}.git {inc.worktree} && git -C {inc.worktree} checkout --detach {inc.head_sha}\n" +
             install + f"Reproduce BEFORE changing anything, twice, as two separate terminal calls in {inc.worktree}: {inc.command}\n"
-            f"3. Run the whole suite once before changing anything: python -m pytest -rA\n"
-            "4. Fix the cause in the source code. Do not edit tests, conftest.py, pytest/tox/setup config or .github: "
+            f"3. Run the whole suite once before changing anything: {rn.full_command}\n"
+            "4. Fix the cause in the source code. Do not edit tests (test files, testdata, conftest.py), pytest/tox/setup config or .github: "
             "the PR is built from source files only, so test edits are dropped and the fix would be refused.\n"
-            f"5. After the fix, run {inc.command} three times, then the whole suite once (python -m pytest -rA).\n"
+            f"5. After the fix, run {inc.command} three times, then the whole suite once ({rn.full_command}).\n"
             "6. Don't commit or push. Tell the user in one line what the cause was and to send /ci to see the proof and open the PR.\n"
-            "Always pass -rA to pytest, and run each pytest command as its own terminal call (no loops, no pipes such as | tail), so every run is recorded."
+            f"{rn.flags_note}, and run each test command as its own terminal call (no loops, no pipes such as | tail), so every run is recorded."
         )
 
     def _ensure_base_tree(self) -> None:
@@ -423,12 +427,13 @@ class Engine:
         return None
 
     def observe(self, tool_name: str, args: dict, result: str) -> None:
-        """post_tool_call: record pytest output from Hermes's own terminal results."""
+        """post_tool_call: record test-runner output from Hermes's own terminal results."""
         inc = self.incident
         if not inc or inc.status not in ("fixing", "ready") or tool_name != "terminal":
             return
         cmd = args.get("command", "")
-        if not _PYTEST_CMD.search(cmd) or not self._in_worktree(cmd, args.get("workdir")):
+        rn = runners.get(inc.runner)
+        if not rn.is_cmd(cmd) or not self._in_worktree(cmd, args.get("workdir")):
             return
         try:
             body = json.loads(result)
@@ -437,9 +442,9 @@ class Engine:
             output, code = str(result), None
         src, _prot = self.source_changes()
         lg = inc.ledger()
-        sessions = ledger.split_sessions(output)
+        sessions = rn.split_sessions(output)
         for chunk in sessions:
-            if not ledger.is_real_session(chunk):
+            if not rn.is_real_session(chunk):
                 continue
             run = lg.record(chunk, code if len(sessions) == 1 else None, changed=bool(src))
             if run is None:
@@ -521,7 +526,7 @@ class Engine:
             sus = "Commits since the last green run (" + inc.last_green[:7] + "): " + ", ".join(f"{c['sha'][:7]} {c['title']}" for c in inc.suspects) + ".\n\n"
         return (
             f"CI went red on `{inc.branch}` at {inc.head_sha[:7]} ([run #{inc.run_number}]({inc.run_url})).\n\n"
-            "This fix was checked locally by Hermes before this PR was opened. The results below come from pytest's own output, recorded by the plugin, not from the model:\n\n"
+            f"This fix was checked locally by Hermes before this PR was opened. The results below come from the test runner's own output ({runners.get(inc.runner).name}), recorded by the plugin, not from the model:\n\n"
             "| test | before the fix | after the fix |\n|---|---|---|\n" + rows + "\n\n"
             + sus +
             f"Full suite: {p['suite']}. Test files untouched: this commit contains source files only, so CI here runs the original tests.\n\n"
