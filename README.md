@@ -37,8 +37,8 @@ Needs Hermes 0.23.1 or newer, and a repo whose Actions run pytest or `go test`.
 | It's a regression from those commits | when there was a green run before, the failing test is run once with only the changed source files put back as they were at that green commit; the card and the PR show "PASSED at last green", so the proof reads green before, red after, green with the fix |
 | The failure is real | each failing test's own `FAILED` result, twice, recorded from Hermes's terminal before any source file changed |
 | It isn't flaky | if the test passes even once before the change, it's reported as flaky and no PR is offered |
-| The fix works | `PASSED` three runs in a row after the change |
-| Nothing else broke | the full suite run before and after: no test that passed before fails after |
+| The fix works | `PASSED` three runs in a row on the exact code that ships: any edit after the passes starts the count over |
+| Nothing else broke | a full-suite run before and after the change is required: no test that passed before may fail after |
 | Tests weren't touched | test files, `testdata`, `conftest.py`, pytest/tox/setup config and `.github` never go in the PR commit; a fix that edits them is refused |
 | Only your source goes in | the commit holds files changed since the red commit; files your `.gitignore` files match (nested ones and `!` lines included) stay out unless the repo tracks them |
 | Only real runs count | the terminal call must be the test command itself (only `cd`, `source` or variables before it, nothing after it, no pipes), only lines between the runner's own header and summary are read, and Go's cached results are ignored |

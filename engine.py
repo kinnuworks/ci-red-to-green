@@ -25,6 +25,12 @@ from .github import GitHub, GitHubError
 POLL_SECONDS = 30
 
 
+def _state_of(src: dict[str, str], snap: dict[str, str]) -> str:
+    """A short hash of the source changes in the fix folder: which files changed and their content."""
+    key = "\n".join(f"{p} {snap.get(p, 'deleted')}" for p in sorted(src))
+    return hashlib.sha1(key.encode()).hexdigest()[:12]
+
+
 def git_blob_sha(data: bytes) -> str:
     return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
 
@@ -32,7 +38,7 @@ def git_blob_sha(data: bytes) -> str:
 # Commands that only read or fetch, and never run the repo's own code. Anything else in the
 # fix folder (pytest, pip install, python, make, tox...) counts as running the repo's code.
 _READ_ONLY = re.compile(
-    r"^(?:cd|ls|cat|head|tail|grep|rg|wc|pwd|echo|printf|diff|tree|file|stat|true|test|\[|mkdir|which|command|type"
+    r"^(?:cd|ls|cat|head|tail|grep|rg|wc|pwd|echo|printf|diff|tree|file|stat|true|test|\[|mkdir|which"
     r"|git\s+(?:-C\s+\S+\s+)?(?:clone|status|diff|log|show|fetch|checkout|switch|rev-parse|branch|ls-files|blame|stash))(?=\s|$)"
 )
 
@@ -295,16 +301,18 @@ class Engine:
 
     def run_loop(self) -> None:
         """Poll until stopped. Meant to run in a thread started with copy_context()."""
-        while not self._stop.is_set():
+        stop = self._stop  # this thread's own event: re-arming swaps self._stop, and the old loop must end
+        while not stop.is_set():
             try:
-                self.tick()
+                with self._lock:
+                    self.tick()
             except GitHubError as e:
                 if e.status in (401, 403, 404):
                     self._post(f"CI watch stopped: {e}")
                     return
             except Exception:  # never let one bad poll kill the watcher
                 pass
-            self._stop.wait(POLL_SECONDS)
+            stop.wait(POLL_SECONDS)
 
     def start_thread(self, runner: Callable[[Callable[[], None]], None] | None = None) -> None:
         self.stop_thread()
@@ -362,7 +370,8 @@ class Engine:
             ids = [r["id"] for r in runs]
             older = runs[ids.index(run["id"]) + 1:] if run["id"] in ids else []
             green = next((r for r in older if r.get("status") == "completed" and r.get("conclusion") == "success"
-                          and r.get("head_sha") != run["head_sha"]), None)
+                          and r.get("head_sha") != run["head_sha"]
+                          and r.get("workflow_id", run.get("workflow_id")) == run.get("workflow_id")), None)
             if not green:
                 return "", []
             commits = gh.compare(green["head_sha"], run["head_sha"])
@@ -501,9 +510,7 @@ class Engine:
         if re.search(r"\bgit\b[^;&|]*\bpush\b|\bgh\s+pr\b", cmd):
             return "block"
         if runs_repo_code(cmd) and not inc.approved_repro:
-            inc.approved_repro = True
-            self.save()
-            return "approve"
+            return "approve"  # until a repo-code command has actually run (see observe), keep asking
         return None
 
     def observe(self, tool_name: str, args: dict, result: str) -> None:
@@ -513,6 +520,13 @@ class Engine:
             return
         cmd = args.get("command", "")
         rn = runners.get(inc.runner)
+        if not inc.approved_repro and self._in_worktree(cmd, args.get("workdir")) and runs_repo_code(cmd):
+            try:  # the user said yes once and it ran: later commands follow Hermes's own policy
+                if json.loads(result).get("exit_code") is not None:
+                    inc.approved_repro = True
+                    self.save()
+            except (ValueError, TypeError, AttributeError):
+                pass
         if not rn.is_cmd(cmd) or not self._in_worktree(cmd, args.get("workdir")):
             return
         try:
@@ -537,12 +551,13 @@ class Engine:
                 all(snap.get(f) == sha for f, sha in inc.anchor_blobs.items())
             # only once, and only before any fix run: a fix that restores the green code is a fix, not an anchor
             anchor = anchor and not any(r.anchor or r.changed for r in lg.runs)
-            run = lg.record(chunk, code if len(sessions) == 1 else None, changed=bool(src) and not anchor, anchor=anchor)
+            run = lg.record(chunk, code if len(sessions) == 1 else None, changed=bool(src) and not anchor, anchor=anchor,
+                            state=_state_of(src, snap))
             if run is None:
                 continue
             run.full_suite = len(run.results) > len(inc.test_ids)
             inc.runs.append(asdict(run))
-        if inc.ledger().verdict()[0]:
+        if inc.ledger().verdict(_state_of(src, snap) if src else None)[0]:
             inc.status = "ready"
         self.save()
 
@@ -576,8 +591,9 @@ class Engine:
     def proof(self) -> dict:
         inc = self.incident
         lg = inc.ledger()
-        summ = lg.summary()
-        src, prot = self.source_changes()
+        snap = blob_snapshot(inc.worktree, inc.base_tree) if os.path.isdir(inc.worktree) else {}
+        src, prot = guard.split(guard.changes(inc.base_tree, snap)) if snap else ({}, {})
+        summ = lg.summary(_state_of(src, snap) if src else None)
         ok = summ["accepted"] and bool(src) and not prot
         reasons = list(summ["reasons"])
         if not src:
@@ -685,7 +701,13 @@ class Engine:
         runs = [r for r in every if r.get("status") == "completed"]
         if not runs or (len(runs) < len(every) and not any(r.get("conclusion") == "failure" for r in runs)):
             return  # wait until every workflow on the fix has finished (a failure can be reported at once)
-        if all(r.get("conclusion") == "success" for r in runs):
+        if len(runs) == len(every) and not any(r.get("conclusion") in ("failure", "timed_out", "action_required") for r in runs) \
+                and not any(r.get("conclusion") == "success" for r in runs):
+            inc.status, inc.pr_run_url = "ci_red", runs[0].get("html_url", "")
+            self.save()
+            self._post(f"GitHub's checks on the fix PR ended without a result (skipped or cancelled): {inc.pr_run_url}\nPR: {inc.pr_url}")
+            return
+        if all(r.get("conclusion") in ("success", "skipped", "neutral") for r in runs):
             inc.status, inc.pr_run_url = "done", runs[0].get("html_url", "")
             self.save()
             self._post(f"Done. GitHub's CI is green on the fix: {inc.pr_run_url}\nPR: {inc.pr_url} (not merged; that's yours)")

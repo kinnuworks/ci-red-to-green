@@ -81,6 +81,12 @@ def term(eng, cmd, output, code, raw=False):
     eng.observe("terminal", args, json.dumps({"output": output, "exit_code": code, "error": None}))
 
 
+def suite(eng, ids, before, other="tests/test_dates.py::test_other"):
+    """A full-suite run: the failing tests plus one that always passes."""
+    body = "".join(f"{'FAILED' if before else 'PASSED'} {t}\n" for t in ids) + f"PASSED {other}\n"
+    term(eng, "python -m pytest -rA", body, 1 if before else 0)
+
+
 def red_run(n=12):
     return {"id": 100 + n, "run_number": n, "status": "completed", "conclusion": "failure",
             "head_sha": "a" * 40, "html_url": f"https://github.com/o/r/actions/runs/{100 + n}"}
@@ -105,15 +111,16 @@ def test_full_loop(tmp_path):
     # first pytest run in the worktree is escalated to Hermes's approval prompt, once
     a = {"command": f"cd {eng.incident.worktree} && python -m pytest -rA {T}"}
     assert eng.needs_approval("terminal", a) == "approve"
-    assert eng.needs_approval("terminal", a) is None
+    assert eng.needs_approval("terminal", a) == "approve"  # keeps asking until a repo-code command has really run
     assert eng.needs_approval("terminal", {"command": f"git -C {eng.incident.worktree} push"}) == "block"
 
     term(eng, "python -m pytest -rA " + T, f"FAILED {T} - AssertionError\n", 1)
+    assert eng.needs_approval("terminal", {"command": f"cd {eng.incident.worktree} && python -m pytest -rA"}) is None
     term(eng, "python -m pytest -rA", f"FAILED {T}\nPASSED tests/test_dates.py::test_other\n", 1)
     write_worktree(eng, {"src/dates.py": b"def month(s):\n    return int(s[5:7])\n"})
     for _ in range(3):
         term(eng, "python -m pytest -rA " + T, f"PASSED {T}\n", 0)
-    assert eng.incident.status == "fixing" or eng.proof()["suite"] == "not run"
+    suite(eng, [T], False)
     term(eng, "python -m pytest -rA", f"PASSED {T}\nPASSED tests/test_dates.py::test_other\n", 0)
 
     p = eng.proof()
@@ -145,6 +152,7 @@ def test_test_edit_is_refused(tmp_path):
     write_worktree(eng, {"tests/test_dates.py": b"def test_parse_iso(): pass\n", "src/dates.py": b"x = 1\n"})
     for _ in range(3):
         term(eng, "python -m pytest -rA " + T, f"PASSED {T}\n", 0)
+    suite(eng, [T], False)
     p = eng.proof()
     assert not p["accepted"]
     assert any("test or CI files changed: tests/test_dates.py" in r for r in p["reasons"])
@@ -343,6 +351,7 @@ def test_card_shows_the_diff_and_flaky_tests_are_refused(tmp_path):
     write_worktree(eng, {"src/dates.py": b"def month(s):\n    return int(s[5:7])\n"})
     for _ in range(3):
         term(eng, "python -m pytest -rA " + T, f"PASSED {T}\n", 0)
+    suite(eng, [T], False)
     card = eng.card_text()
     assert "flaky: passed before any change" in card and "Not ready" in card
     assert "-    return int(s[5:7]) - 1" in card and "+    return int(s[5:7])" in card
@@ -367,6 +376,7 @@ def test_demo_runs_the_whole_loop_without_github(tmp_path):
     passed = "".join(f"PASSED {t}\n" for t in inc.test_ids)
     for _ in range(2):
         term(eng, inc.command, ids.replace(" FAILED", "FAILED"), 1)
+    suite(eng, inc.test_ids, True, "tests/test_filesize.py::test_naturalsize_negative")
     fixed = Path(inc.worktree, "humanize_mini/filesize.py")
     src = fixed.read_text().replace(
         "    space = \"\" if gnu else \" \"\n",
@@ -375,6 +385,7 @@ def test_demo_runs_the_whole_loop_without_github(tmp_path):
     fixed.write_text(src)
     for _ in range(3):
         term(eng, inc.command, passed, 0)
+    suite(eng, inc.test_ids, False, "tests/test_filesize.py::test_naturalsize_negative")
     assert eng.incident.status == "ready", eng.proof()["reasons"]
     out = eng.open_pr()
     assert "patch" in out and eng.incident.status == "done"
@@ -437,15 +448,18 @@ def test_runs_with_edited_tests_never_count_and_pr_waits_for_every_workflow(tmp_
     write_worktree(eng, BASE)
     for _ in range(2):
         term(eng, "python -m pytest -rA " + T, f"FAILED {T}\n", 1)
+    suite(eng, [T], True)
     write_worktree(eng, {"src/dates.py": b"def month(s):\n    return int(s[5:7])\n", "tests/test_dates.py": b"def test_parse_iso(): pass\n"})
     for _ in range(3):
         term(eng, "python -m pytest -rA " + T, f"PASSED {T}\n", 0)
+    suite(eng, [T], False)
     write_worktree(eng, {"tests/test_dates.py": BASE["tests/test_dates.py"]})  # edit undone before /ci
     p = eng.proof()
     assert p["tests"][T]["passes_after"] == 0 and not p["accepted"]
-    assert p["ignored_runs"] == 3 and "were not counted" in eng.card_text()
+    assert p["ignored_runs"] == 4 and "were not counted" in eng.card_text()
     for _ in range(3):
         term(eng, "python -m pytest -rA " + T, f"PASSED {T}\n", 0)
+    suite(eng, [T], False)
     assert eng.incident.status == "ready"
     assert eng.open_pr().startswith("PR opened"), eng.proof()["reasons"]
     FakeGH.state["pr_runs"] = [{"status": "completed", "conclusion": "success", "html_url": "u1"}, {"status": "in_progress"}]
@@ -483,6 +497,7 @@ def test_three_point_proof_green_red_green(tmp_path):
     write_worktree(eng, BASE)
     for _ in range(2):
         term(eng, "python -m pytest -rA " + T, f"FAILED {T}\n", 1)
+    suite(eng, [T], True)
     write_worktree(eng, {"src/dates.py": green_src})  # restored to green: the anchor run
     term(eng, "python -m pytest -rA " + T, f"PASSED {T}\n", 0)
     write_worktree(eng, BASE)  # back to red
@@ -490,8 +505,9 @@ def test_three_point_proof_green_red_green(tmp_path):
     write_worktree(eng, {"src/dates.py": green_src})  # the fix happens to restore the green code
     for _ in range(3):
         term(eng, "python -m pytest -rA " + T, f"PASSED {T}\n", 0)
+    suite(eng, [T], False)
     p = eng.proof()
-    assert p["tests"][T]["passes_after"] == 3 and p["accepted"], p["reasons"]
+    assert p["tests"][T]["passes_after"] == 4 and p["accepted"], p["reasons"]
     assert "PASSED at last green bbbbbbb" in eng.card_text()
     assert "at the last green commit (bbbbbbb)" in eng.pr_body()
 
@@ -508,10 +524,60 @@ def test_read_only_token_gets_the_proven_patch(tmp_path, monkeypatch):
     write_worktree(eng, BASE)
     for _ in range(2):
         term(eng, "python -m pytest -rA " + T, f"FAILED {T}\n", 1)
+    suite(eng, [T], True)
     write_worktree(eng, {"src/dates.py": b"def month(s):\n    return int(s[5:7])\n"})
     for _ in range(3):
         term(eng, "python -m pytest -rA " + T, f"PASSED {T}\n", 0)
+    suite(eng, [T], False)
     out = eng.open_pr()
     assert "can't push" in out and "git apply" in out and eng.incident.status == "done"
     patch = Path(eng.incident.pr_url).read_text()
     assert "+++ b/src/dates.py" in patch and "FAILED 2/2" in patch and "tests/" not in patch.split("+++")[1]
+
+
+def test_an_edit_after_the_passes_starts_the_count_over(tmp_path):
+    eng, posts = make(tmp_path)
+    eng.start_watch("o/r", "main")
+    FakeGH.state["runs"] = [red_run()]
+    eng.tick()
+    eng.fix_context()
+    write_worktree(eng, BASE)
+    for _ in range(2):
+        term(eng, "python -m pytest -rA " + T, f"FAILED {T}\n", 1)
+    suite(eng, [T], True)
+    write_worktree(eng, {"src/dates.py": b"def month(s):\n    return int(s[5:7])\n"})
+    for _ in range(3):
+        term(eng, "python -m pytest -rA " + T, f"PASSED {T}\n", 0)
+    suite(eng, [T], False)
+    assert eng.proof()["accepted"]
+    write_worktree(eng, {"src/dates.py": b"def month(s):\n    return int(s[5:7])  # unproven edit\n"})
+    p = eng.proof()
+    assert not p["accepted"] and p["tests"][T]["passes_after"] == 0 and p["suite"] == "not run"
+    assert eng.open_pr().startswith("Not opening a PR")
+
+
+def test_old_poller_stops_when_rearmed(tmp_path):
+    import threading
+    import time
+
+    eng, _ = make(tmp_path)
+    eng.start_watch("o/r", "main")
+    eng.start_thread()
+    first = eng._thread
+    eng.start_thread()
+    first.join(timeout=2)
+    assert not first.is_alive() and eng._thread.is_alive()
+    eng.stop_thread()
+    time.sleep(0.05)
+    assert threading.active_count() >= 1
+
+
+def test_pr_checks_that_end_without_a_result_are_reported(tmp_path):
+    eng, posts = make(tmp_path)
+    eng.start_watch("o/r", "main")
+    FakeGH.state["runs"] = [red_run()]
+    eng.tick()
+    eng.incident.status, eng.incident.pr_sha, eng.incident.pr_url = "pr_open", "f" * 40, "https://github.com/o/r/pull/1"
+    FakeGH.state["pr_runs"] = [{"status": "completed", "conclusion": "cancelled", "html_url": "u"}]
+    eng.tick()
+    assert eng.incident.status == "ci_red" and "without a result" in posts[-1]

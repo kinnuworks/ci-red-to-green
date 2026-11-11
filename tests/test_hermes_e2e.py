@@ -43,21 +43,22 @@ out["clone_directive"] = get_pre_tool_call_directive("terminal", {"command": f"t
 out["first_run_directive"] = get_pre_tool_call_directive("terminal", {"command": full})[0]
 out["push_directive"] = get_pre_tool_call_directive("terminal", {"command": f"git -C {wt} push origin HEAD"})[0]
 
-def run_tests():
-    p = subprocess.run(full.replace("python -m pytest", os.environ["PYTEST_PYTHON"] + " -m pytest", 1),
+def run_tests(cmd=None):
+    cmd = cmd or full
+    p = subprocess.run(cmd.replace("python -m pytest", os.environ["PYTEST_PYTHON"] + " -m pytest", 1),
                        shell=True, capture_output=True, text=True)
-    invoke_hook("post_tool_call", tool_name="terminal", args={"command": full},
+    invoke_hook("post_tool_call", tool_name="terminal", args={"command": cmd},
                 result=json.dumps({"output": p.stdout + p.stderr, "exit_code": p.returncode, "error": None}),
                 session_id="s", tool_call_id="t")
     return p.returncode
 
-out["before"] = [run_tests(), run_tests()]
+out["before"] = [run_tests(), run_tests(), run_tests(f"cd {wt} && python -m pytest -rA")]
 src = open(f"{wt}/humanize_mini/filesize.py").read()
 src = src.replace('    space = "" if gnu else " "\n',
                   '    if exp < len(suffix) and abs(float(format % (abs_bytes / (base**exp)))) >= base:\n'
                   '        exp += 1\n    space = "" if gnu else " "\n')
 open(f"{wt}/humanize_mini/filesize.py", "w").write(src)
-out["after"] = [run_tests() for _ in range(3)]
+out["after"] = [run_tests() for _ in range(3)] + [run_tests(f"cd {wt} && python -m pytest -rA")]
 out["card"] = ci("status")
 from importlib import import_module
 eng = [m for m in sys.modules.values() if getattr(m, "_ENGINE", None) is not None and getattr(m, "__file__", "").endswith("ci-red-to-green/__init__.py")][0]._ENGINE
@@ -91,7 +92,7 @@ def test_demo_through_the_real_plugin_manager(tmp_path):
     assert out["clone_directive"] is None
     assert out["first_run_directive"] == "approve"
     assert out["push_directive"] == "block"
-    assert out["before"] == [1, 1] and out["after"] == [0, 0, 0]
+    assert out["before"] == [1, 1, 1] and out["after"] == [0, 0, 0, 0]
     assert out["status"] == "ready"
     assert "patch" in out["open"]
     assert "+++ b/humanize_mini/filesize.py" in out["patch"] and "tests/" not in out["patch"]

@@ -5,16 +5,24 @@ FAIL = f"FAILED {T} - AssertionError\n"
 PASS = f"PASSED {T}\n"
 
 
-def lg_with(*runs):
+def lg_with(*runs, suite=False):
     lg = ledger.Ledger([T])
     for out, changed in runs:
         lg.record(out, 0 if "PASSED" in out else 1, changed)
+    if suite:  # a full-suite run before and after the change
+        lg.record(f"FAILED {T}\nPASSED tests/a.py::other\n", 1, False, full_suite=True)
+        lg.record(f"PASSED {T}\nPASSED tests/a.py::other\n", 0, True, full_suite=True)
     return lg
 
 
 def test_accepts_fail_before_then_three_passes():
-    ok, why = lg_with((FAIL, False), (FAIL, False), (PASS, True), (PASS, True), (PASS, True)).verdict()
+    ok, why = lg_with((FAIL, False), (FAIL, False), (PASS, True), (PASS, True), (PASS, True), suite=True).verdict()
     assert ok, why
+
+
+def test_full_suite_is_required():
+    ok, why = lg_with((FAIL, False), (FAIL, False), (PASS, True), (PASS, True), (PASS, True)).verdict()
+    assert not ok and "full suite not run" in why[-1]
 
 
 def test_one_failing_run_before_is_not_enough():
@@ -84,7 +92,9 @@ def test_several_sessions_in_one_output_count_separately():
     lg.record(FAIL, 1, False)
     for c in chunks:
         lg.record(c, None, True)
-    assert lg.passes_after(T) == 3 and lg.verdict()[0]
+    lg.record(f"FAILED {T}\nPASSED tests/a.py::other\n", 1, False, full_suite=True)
+    lg.record(f"PASSED {T}\nPASSED tests/a.py::other\n", 0, True, full_suite=True)
+    assert lg.passes_after(T) == 4 and lg.verdict()[0]
 
 
 def test_results_with_spaced_params():

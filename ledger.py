@@ -64,6 +64,7 @@ class Run:
     exit_code: int | None
     full_suite: bool
     anchor: bool = False  # ran with the source files restored to the last green commit
+    state: str = ""  # hash of the source changes the run saw; the proof must match the code that ships
 
 
 @dataclass
@@ -73,11 +74,11 @@ class Ledger:
     parse: Callable[[str], dict[str, str]] | None = field(default=None, repr=False, compare=False)
 
     def record(self, output: str, exit_code: int | None, changed: bool, full_suite: bool = False,
-               anchor: bool = False) -> Run | None:
+               anchor: bool = False, state: str = "") -> Run | None:
         results = (self.parse or parse_results)(output)
         if not results:
             return None
-        run = Run(changed=changed, results=results, exit_code=exit_code, full_suite=full_suite, anchor=anchor)
+        run = Run(changed=changed, results=results, exit_code=exit_code, full_suite=full_suite, anchor=anchor, state=state)
         self.runs.append(run)
         return run
 
@@ -100,27 +101,28 @@ class Ledger:
         """Passed at least once before any source change: the failure doesn't reproduce reliably."""
         return any(not r.changed and r.results.get(tid) == "PASSED" for r in self._main())
 
-    def passes_after(self, tid: str) -> int:
-        """Consecutive PASSED results for tid, counted back from the latest changed run."""
+    def passes_after(self, tid: str, state: str | None = None) -> int:
+        """Consecutive PASSED results for tid, counted back from the latest changed run. With state,
+        only runs of exactly that source state count: an edit after the passes starts the count over."""
         n = 0
         for r in reversed([r for r in self._main() if r.changed and tid in r.results]):
-            if r.results[tid] != "PASSED":
+            if r.results[tid] != "PASSED" or (state is not None and r.state != state):
                 break
             n += 1
         return n
 
-    def new_failures(self) -> list[str] | None:
+    def new_failures(self, state: str | None = None) -> list[str] | None:
         """Tests that passed in the last full-suite run before the change and fail in the last one after.
 
-        None means no before/after pair of full-suite runs was recorded."""
+        None means no before/after pair of full-suite runs was recorded (for this source state)."""
         before = [r for r in self._main() if r.full_suite and not r.changed]
-        after = [r for r in self._main() if r.full_suite and r.changed]
+        after = [r for r in self._main() if r.full_suite and r.changed and (state is None or r.state == state)]
         if not before or not after:
             return None
         b, a = before[-1].results, after[-1].results
         return sorted(t for t, o in b.items() if o == "PASSED" and a.get(t) in ("FAILED", "ERROR"))
 
-    def verdict(self) -> tuple[bool, list[str]]:
+    def verdict(self, state: str | None = None) -> tuple[bool, list[str]]:
         """(accepted, reasons). Reasons explain every unmet condition."""
         why: list[str] = []
         for tid in self.test_ids:
@@ -128,21 +130,23 @@ class Ledger:
                 why.append(f"{tid}: passed before any change, so it's flaky, not broken")
             elif not self.failed_before(tid):
                 why.append(f"{tid}: {self.fails_before(tid)}/{FAILS_NEEDED} failing runs before the change")
-            p = self.passes_after(tid)
+            p = self.passes_after(tid, state)
             if p < PASSES_NEEDED:
                 why.append(f"{tid}: {p}/{PASSES_NEEDED} passing runs after the change")
-        nf = self.new_failures()
-        if nf:
+        nf = self.new_failures(state)
+        if nf is None:
+            why.append("full suite not run both before and after the change")
+        elif nf:
             why.append("new failures in the full suite: " + ", ".join(nf))
         return (not why, why)
 
-    def summary(self) -> dict:
-        ok, why = self.verdict()
-        nf = self.new_failures()
+    def summary(self, state: str | None = None) -> dict:
+        ok, why = self.verdict(state)
+        nf = self.new_failures(state)
         return {
             "accepted": ok,
             "reasons": why,
             "tests": {t: {"failed_before": self.failed_before(t), "fails_before": self.fails_before(t), "flaky": self.flaky(t), "at_green": self.at_green(t),
-                          "passes_after": self.passes_after(t)} for t in self.test_ids},
+                          "passes_after": self.passes_after(t, state)} for t in self.test_ids},
             "suite": "not run" if nf is None else ("no new failures" if not nf else f"{len(nf)} new failures"),
         }
