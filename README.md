@@ -48,7 +48,7 @@ The plugin never pushes to your base branch and never merges.
 - **GitHub API:** polls Actions runs for the watched repo every 30 seconds, downloads failed job logs, and (only when you tap Open PR) creates a branch, a commit and a pull request. Uses only `CI_RED_TO_GREEN_GITHUB_TOKEN`. Job logs are downloaded from GitHub's signed log URL without forwarding the token.
 - **Shell commands:** the plugin runs none itself. The agent clones the repo into the plugin's data folder and runs pytest through Hermes's terminal tool; the first test run is sent to Hermes's approval prompt, and `git push` from the fix folder is blocked.
 - **Stored data:** watch settings, the current incident and the recorded test results live in `plugin-data/ci-red-to-green/` under your Hermes home, plus the cloned repo in `plugin-data/ci-red-to-green/worktrees/`.
-- **Background thread:** one polling thread while a watch is on. It stops with `/ci stop` or when Hermes restarts (run `/ci watch` again).
+- **Background thread:** one polling thread while a watch is on. It stops with `/ci stop` or when Hermes restarts; any `/ci` command in that chat starts it again.
 - No telemetry.
 
 ## Limits
