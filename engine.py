@@ -219,7 +219,7 @@ class Engine:
             f"Repo {self.watch.repo}, branch {inc.branch}, commit {inc.head_sha}, run #{inc.run_number}.\n"
             f"Failing tests:\n{ids}\n\n"
             "Do exactly this, using the terminal tool:\n"
-            f"1. git clone https://github.com/{self.watch.repo}.git {inc.worktree} && git -C {inc.worktree} checkout --detach {inc.head_sha}\n"
+            f"1. If {inc.worktree} doesn't exist yet: git clone https://github.com/{self.watch.repo}.git {inc.worktree} && git -C {inc.worktree} checkout --detach {inc.head_sha}\n"
             f"2. In {inc.worktree}, install the project the way its CI does (for example python -m pip install -e . pytest), then reproduce BEFORE changing anything: {inc.command}\n"
             f"3. Run the whole suite once before changing anything: python -m pytest -rA\n"
             "4. Fix the cause in the source code. Do not edit tests, conftest.py, pytest/tox/setup config or .github: "
