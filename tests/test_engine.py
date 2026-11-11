@@ -273,6 +273,11 @@ def test_snapshot_for_desktop(tmp_path):
         ("cd /w && ls && python setup.py develop", True),
         ("test -d /w && echo exists || (git clone https://github.com/o/r /w && git -C /w checkout --detach abc)", False),
         ("[ -d /w ] || mkdir -p /w", False),
+        ("cd /w && ls -la && find . -maxdepth 3 -not -path './.venv*' | head -50", False),
+        ("sed -n 1,40p /w/a.py", False),
+        ("find /w -name '*.py' -exec python {} \\;", True),
+        ("find /w -delete", True),
+        ("sed -i s/a/b/ /w/a.py", True),
     ],
 )
 def test_runs_repo_code(cmd, runs):

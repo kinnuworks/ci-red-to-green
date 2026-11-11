@@ -37,10 +37,14 @@ _READ_ONLY = re.compile(
 )
 
 
+# find and sed only read unless asked to run or edit something
+_READ_ONLY_IF = re.compile(r"^(?:find(?!.*\s-(?:exec|execdir|ok|okdir|delete|fprint)\b)|sed(?!.*\s-[a-zA-Z]*i)(?!.*\s--in-place))(?=\s|$)")
+
+
 def runs_repo_code(command: str) -> bool:
     """True unless every part of the command is a known read-only step."""
     parts = [p.strip().strip("()").strip() for p in re.split(r"&&|\|\||;|\|", command or "")]
-    return any(p and not _READ_ONLY.match(p) for p in parts)
+    return any(p and not (_READ_ONLY.match(p) or _READ_ONLY_IF.match(p)) for p in parts)
 
 
 def _read_ignore(path: str) -> list[str]:
