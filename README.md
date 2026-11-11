@@ -24,7 +24,7 @@ The demo is a trimmed copy of [humanize](https://github.com/python-humanize/huma
 
 ## Use it on your repo
 
-1. Make a fine-grained GitHub token for the repo (Actions: read, Contents: read and write, Pull requests: read and write) and save it in Hermes as `CI_RED_TO_GREEN_GITHUB_TOKEN`.
+1. Make a fine-grained GitHub token for the repo (Actions: read, Contents: read and write, Pull requests: read and write) and save it in Hermes as `CI_RED_TO_GREEN_GITHUB_TOKEN`. A read-only token (Actions and Contents: read) works too: you get the alert and the proof, and Open PR hands you the proven fix as a patch file instead of pushing.
 2. In a chat with Hermes: `/ci watch owner/repo main`, or use the **Watch** field on the Desktop page. Add more repos the same way.
 3. When CI goes red, the alert arrives in that chat and as a Desktop notification. Reply `fix`. When the proof is complete, send `/ci` and pick **Open PR** (on Telegram, Hermes numbers the buttons: tap 1), or click **Open PR** in the Desktop pane.
 

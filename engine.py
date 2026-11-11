@@ -643,8 +643,18 @@ class Engine:
         gh = self.gh()
         branch = f"ci-fix/run-{inc.run_number}-{int(self._clock())}"
         first = inc.test_ids[0].split("::")[-1]
-        sha = gh.create_branch_commit(inc.head_sha, files, f"Fix {first} (CI run #{inc.run_number})", branch)
-        pr = gh.open_pr(branch, inc.branch, f"Fix {first} (red CI run #{inc.run_number})", self.pr_body())
+        try:
+            sha = gh.create_branch_commit(inc.head_sha, files, f"Fix {first} (CI run #{inc.run_number})", branch)
+            pr = gh.open_pr(branch, inc.branch, f"Fix {first} (red CI run #{inc.run_number})", self.pr_body())
+        except GitHubError as e:
+            if e.status not in (403, 404):
+                raise
+            # A read-only token can still watch and prove; hand over the proven patch instead of a PR.
+            path = self._write_patch(files, f"Fix {first} (CI run #{inc.run_number})")
+            inc.pr_url, inc.status = str(path), "done"
+            self.save()
+            return (f"Your token can't push to {self.watch.repo}, so here is the proven fix as a patch: {path}\n"
+                    f"Apply it with: git apply {path}\nThe proof is in the patch header. Nothing was pushed.")
         inc.pr_url, inc.pr_branch, inc.pr_sha, inc.status = pr.get("html_url", ""), branch, sha, "pr_open"
         if self.watch.demo:
             inc.status = "done"
@@ -653,6 +663,22 @@ class Engine:
                     "With a real repo, this opens a PR with source files only and waits for GitHub's CI to go green.")
         self.save()
         return f"PR opened: {inc.pr_url}\nI'll tell you here when GitHub's CI finishes on it."
+
+    def _write_patch(self, files: dict[str, bytes | None], subject: str) -> Path:
+        inc = self.incident
+        gh = self.gh()
+        chunks = [f"Subject: {subject}\n\n" + self.pr_body() + "\n\n"]
+        for path, new in sorted(files.items()):
+            old = b""
+            sha = inc.base_tree.get(path)
+            if sha:
+                old = self._blobs.get(sha) or gh.blob(sha)
+            chunks.extend(difflib.unified_diff(old.decode("utf-8", "replace").splitlines(keepends=True),
+                                               (new or b"").decode("utf-8", "replace").splitlines(keepends=True),
+                                               f"a/{path}", f"b/{path}"))
+        out = self.data_dir / f"fix-run-{inc.run_number}.patch"
+        out.write_text("".join(chunks))
+        return out
 
     def _follow_pr(self, gh: GitHub, inc: Incident) -> None:
         every = gh.runs(head_sha=inc.pr_sha)

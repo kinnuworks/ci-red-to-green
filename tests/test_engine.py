@@ -494,3 +494,24 @@ def test_three_point_proof_green_red_green(tmp_path):
     assert p["tests"][T]["passes_after"] == 3 and p["accepted"], p["reasons"]
     assert "PASSED at last green bbbbbbb" in eng.card_text()
     assert "at the last green commit (bbbbbbb)" in eng.pr_body()
+
+
+def test_read_only_token_gets_the_proven_patch(tmp_path, monkeypatch):
+    def denied(self, *a, **k):
+        raise E.GitHubError(403, "Resource not accessible by personal access token")
+    monkeypatch.setattr(FakeGH, "create_branch_commit", denied)
+    eng, posts = make(tmp_path)
+    eng.start_watch("o/r", "main")
+    FakeGH.state["runs"] = [red_run()]
+    eng.tick()
+    eng.fix_context()
+    write_worktree(eng, BASE)
+    for _ in range(2):
+        term(eng, "python -m pytest -rA " + T, f"FAILED {T}\n", 1)
+    write_worktree(eng, {"src/dates.py": b"def month(s):\n    return int(s[5:7])\n"})
+    for _ in range(3):
+        term(eng, "python -m pytest -rA " + T, f"PASSED {T}\n", 0)
+    out = eng.open_pr()
+    assert "can't push" in out and "git apply" in out and eng.incident.status == "done"
+    patch = Path(eng.incident.pr_url).read_text()
+    assert "+++ b/src/dates.py" in patch and "FAILED 2/2" in patch and "tests/" not in patch.split("+++")[1]
