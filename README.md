@@ -9,6 +9,7 @@ When your GitHub Actions run goes red, Hermes messages you in chat. Reply `fix` 
 It needs Hermes because the proof comes from Hermes's own terminal results, the first test run goes through Hermes's approval prompt, and the alert, the reply and the Open PR button all happen in the chat you already use.
 
 Site, with a live simulator of the gate: https://kinnuworks.github.io/ci-red-to-green/
+A real run, in public: [this PR](https://github.com/kinnuworks/datekit-demo/pull/1) was opened by the plugin after CI went red on three tests. Its body has the before and after table, it holds one source file, and GitHub's check on it passed.
 
 ## Try it in 30 seconds
 
