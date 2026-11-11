@@ -10,6 +10,7 @@ import pathlib
 import sys
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 router = APIRouter()
 _INIT = pathlib.Path(__file__).resolve().parents[1] / "__init__.py"
@@ -47,3 +48,27 @@ async def open_pr():
 async def discard():
     eng = _engine()
     return {"message": eng.discard(), **eng.snapshot()}
+
+
+@router.post("/demo")
+async def start_demo():
+    eng = _engine()
+    return {"message": eng.start_demo(), **eng.snapshot()}
+
+
+class WatchBody(BaseModel):
+    repo: str
+    branch: str = "main"
+
+
+@router.post("/watch")
+async def watch(body: WatchBody):
+    eng = _engine()
+    if body.repo.count("/") != 1:
+        raise HTTPException(status_code=400, detail="Use owner/repo")
+    try:
+        msg = eng.start_watch(body.repo.strip(), (body.branch or "main").strip())
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    eng.start_thread()  # alerts show here; a /ci in a chat binds that chat for messages
+    return {"message": msg, **eng.snapshot()}

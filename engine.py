@@ -7,6 +7,7 @@ __init__.py. This module takes plain callables so it can be tested without Herme
 
 from __future__ import annotations
 
+import difflib
 import fnmatch
 import hashlib
 import json
@@ -18,7 +19,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from . import guard, ledger, logparse
+from . import demo, guard, ledger, logparse
 from .github import GitHub, GitHubError
 
 POLL_SECONDS = 30
@@ -33,57 +34,79 @@ def git_blob_sha(data: bytes) -> str:
 # Commands that only read or fetch, and never run the repo's own code. Anything else in the
 # fix folder (pytest, pip install, python, make, tox...) counts as running the repo's code.
 _READ_ONLY = re.compile(
-    r"^(?:cd|ls|cat|head|tail|grep|rg|find|wc|pwd|echo|sed|diff|tree|file|stat|true"
-    r"|git\s+(?:-C\s+\S+\s+)?(?:clone|status|diff|log|show|fetch|checkout|switch|rev-parse|branch|ls-files|blame|stash))\b"
+    r"^(?:cd|ls|cat|head|tail|grep|rg|find|wc|pwd|echo|printf|sed|diff|tree|file|stat|true|test|\[|mkdir|which|command|type"
+    r"|git\s+(?:-C\s+\S+\s+)?(?:clone|status|diff|log|show|fetch|checkout|switch|rev-parse|branch|ls-files|blame|stash))(?=\s|$)"
 )
 
 
 def runs_repo_code(command: str) -> bool:
     """True unless every part of the command is a known read-only step."""
-    parts = [p.strip() for p in re.split(r"&&|\|\||;|\|", command or "")]
+    parts = [p.strip().strip("()").strip() for p in re.split(r"&&|\|\||;|\|", command or "")]
     return any(p and not _READ_ONLY.match(p) for p in parts)
 
 
-def _ignore_patterns(root: str) -> list[str]:
+def _read_ignore(path: str) -> list[str]:
     try:
-        with open(os.path.join(root, ".gitignore"), encoding="utf-8", errors="replace") as fh:
-            lines = [ln.strip() for ln in fh]
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            return [ln.rstrip("\n").rstrip() for ln in fh]
     except OSError:
         return []
-    return [ln for ln in lines if ln and not ln.startswith(("#", "!"))]
 
 
-def _ignored(rel: str, patterns: list[str]) -> bool:
+def _rule_matches(pattern: str, rel: str) -> bool:
+    """git-style match of one .gitignore line (already stripped of '!') against a path
+    relative to that .gitignore's folder."""
+    dir_only = pattern.endswith("/")
+    p = pattern.strip("/")
+    if not p:
+        return False
+    anchored = pattern.startswith("/") or "/" in p
     parts = rel.split("/")
-    for pat in patterns:
-        anchored = pat.startswith("/")
-        p = pat.strip("/")
-        if pat.endswith("/"):  # directory pattern: any parent dir matches
-            dirs = parts[:-1]
-            cands = ["/".join(dirs[: i + 1]) for i in range(len(dirs))] if "/" in p or anchored else dirs
-        elif "/" in p or anchored:
-            cands = [rel] + ["/".join(parts[: i + 1]) for i in range(len(parts) - 1)]
-        else:
-            cands = parts
-        if any(fnmatch.fnmatchcase(c, p) for c in cands):
-            return True
-    return False
+    # every leading directory of the file, plus the file itself (directory rules skip the file)
+    cands = ["/".join(parts[: i + 1]) for i in range(len(parts) - (1 if dir_only else 0))]
+    if anchored:
+        return any(fnmatch.fnmatchcase(c, p) or fnmatch.fnmatchcase(c, p.replace("**/", "")) for c in cands)
+    names = parts[:-1] if dir_only else parts
+    return any(fnmatch.fnmatchcase(n, p) for n in names)
+
+
+def _ignored(rel: str, rules: list[tuple[str, str]]) -> bool:
+    """rules: (folder of the .gitignore relative to the root, line). The last matching line wins."""
+    hit = False
+    for base, line in rules:
+        if not line or line.startswith("#"):
+            continue
+        if base and not rel.startswith(base + "/"):
+            continue
+        sub = rel[len(base) + 1:] if base else rel
+        neg = line.startswith("!")
+        pat = line[1:] if neg else line
+        if pat.startswith("\\"):
+            pat = pat[1:]
+        if _rule_matches(pat, sub):
+            hit = not neg
+    return hit
 
 
 def blob_snapshot(root: str, tracked: dict[str, str] | None = None) -> dict[str, str]:
     """git blob sha of every file in the worktree, keyed by relative path. Caches and files
-    matched by the repo's top-level .gitignore are skipped, unless the base commit tracks them."""
+    matched by the repo's .gitignore files (nested ones and '!' lines included) are skipped,
+    unless the base commit tracks them."""
     out: dict[str, str] = {}
     tracked = tracked or {}
-    patterns = _ignore_patterns(root)
+    rules: list[tuple[str, str]] = []
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in guard._SKIP_DIRS and not d.endswith(".egg-info")]
+        dirnames[:] = sorted(d for d in dirnames if d not in guard._SKIP_DIRS and not d.endswith(".egg-info"))
+        here = os.path.relpath(dirpath, root).replace(os.sep, "/")
+        here = "" if here == "." else here
+        if ".gitignore" in filenames:
+            rules.extend((here, ln) for ln in _read_ignore(os.path.join(dirpath, ".gitignore")))
         for f in filenames:
             full = os.path.join(dirpath, f)
             if os.path.islink(full) or not os.path.isfile(full) or f.endswith((".pyc", ".pyo")):
                 continue
             rel = os.path.relpath(full, root).replace(os.sep, "/")
-            if rel not in tracked and _ignored(rel, patterns):
+            if rel not in tracked and _ignored(rel, rules):
                 continue
             with open(full, "rb") as fh:
                 out[rel] = git_blob_sha(fh.read())
@@ -109,6 +132,9 @@ class Incident:
     pr_branch: str = ""
     pr_sha: str = ""
     pr_run_url: str = ""
+    last_green: str = ""  # head sha of the last green run before this one
+    suspects: list[dict] = field(default_factory=list)  # commits since then: sha, title, author
+    opened_at: float = 0.0
 
     def ledger(self) -> ledger.Ledger:
         lg = ledger.Ledger(self.test_ids)
@@ -122,22 +148,27 @@ class Watch:
     repo: str
     branch: str
     seen: list[int] = field(default_factory=list)
+    demo: bool = False
 
 
 class Engine:
     def __init__(self, data_dir: Path, token_fn: Callable[[], str | None],
-                 post: Callable[[str], object], gh_factory=GitHub, clock=time.time):
+                 post: Callable[[str], object], gh_factory=GitHub, clock=time.time,
+                 on_change: Callable[[dict], object] | None = None):
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self._token_fn = token_fn
         self._post = post
         self._gh_factory = gh_factory
         self._clock = clock
+        self._on_change = on_change
         self._lock = threading.RLock()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self.watch: Watch | None = None
         self.incident: Incident | None = None
+        self.history: list[dict] = []
+        self._blobs: dict[str, bytes] = {}
         self._load()
 
     # ---- persistence -----------------------------------------------------------
@@ -154,6 +185,7 @@ class Engine:
             self.watch = Watch(**raw["watch"])
         if raw.get("incident"):
             self.incident = Incident(**raw["incident"])
+        self.history = raw.get("history") or []
 
     def save(self) -> None:
         with self._lock:
@@ -161,11 +193,19 @@ class Engine:
             tmp.write_text(json.dumps({
                 "watch": asdict(self.watch) if self.watch else None,
                 "incident": asdict(self.incident) if self.incident else None,
+                "history": self.history[:20],
             }))
             os.replace(tmp, self._state_file)
+        if self._on_change:
+            try:  # tells the Desktop half to refresh; never let it break the engine
+                self._on_change({"status": self.incident.status if self.incident else None})
+            except Exception:
+                pass
 
     # ---- github ----------------------------------------------------------------
     def gh(self) -> GitHub:
+        if self.watch and self.watch.demo:
+            return demo.DemoGitHub(None, self.watch.repo, self.data_dir)
         token = self._token_fn()
         if not token:
             raise GitHubError(401, "CI_RED_TO_GREEN_GITHUB_TOKEN is not set")
@@ -183,6 +223,32 @@ class Engine:
             self.watch.seen = [r["id"] for r in gh.runs(branch=branch) if r.get("status") == "completed"]
             self.save()
         return f"Watching {repo} @ {branch}. I'll message you here when CI goes red."
+
+    def _archive(self) -> None:
+        """Keep a short record of the incident being replaced, for the Desktop history page."""
+        inc = self.incident
+        if not inc:
+            return
+        self.history.insert(0, {
+            "repo": self.watch.repo if self.watch else "", "run_number": inc.run_number, "run_url": inc.run_url,
+            "branch": inc.branch, "sha": inc.head_sha[:7], "tests": len(inc.test_ids), "first_test": inc.test_ids[0] if inc.test_ids else "",
+            "status": inc.status, "pr_url": inc.pr_url, "pr_run_url": inc.pr_run_url, "opened_at": inc.opened_at,
+            "suspects": inc.suspects[:1],
+        })
+        del self.history[20:]
+
+    def start_demo(self) -> str:
+        """Replay a real bug from humanize on a bundled copy, with no token and no network."""
+        with self._lock:
+            if self.incident and self.incident.status not in ("done", "discarded"):
+                self.incident.status = "discarded"
+            self.watch = Watch(repo=demo.REPO, branch="main", demo=True)
+            demo.copy_sample(str(self.data_dir / "worktrees" / str(demo.RUN_ID)))
+            self.save()
+            self.tick()
+        return ("Demo: a copy of humanize's filesize code with the real bug humanize fixed in PR #329, "
+                "and pytest's real output on it as the red CI log. No token, no network, no PR: Open PR writes a patch file. "
+                "Run /ci watch owner/repo afterwards to go back to a real repo.")
 
     def run_loop(self) -> None:
         """Poll until stopped. Meant to run in a thread started with copy_context()."""
@@ -228,6 +294,32 @@ class Engine:
                 self._open_incident(gh, run)
                 return
 
+    def _suspects(self, gh: GitHub, run: dict) -> tuple[str, list[dict]]:
+        """The last green commit before this red run, and the commits that came in since."""
+        try:
+            runs = gh.runs(branch=self.watch.branch, per_page=30)
+            ids = [r["id"] for r in runs]
+            older = runs[ids.index(run["id"]) + 1:] if run["id"] in ids else []
+            green = next((r for r in older if r.get("status") == "completed" and r.get("conclusion") == "success"
+                          and r.get("head_sha") != run["head_sha"]), None)
+            if not green:
+                return "", []
+            commits = gh.compare(green["head_sha"], run["head_sha"])
+        except Exception:
+            return "", []
+        out = [{"sha": c.get("sha", ""), "title": (c.get("commit", {}).get("message") or "").splitlines()[0][:100] if c.get("commit") else "",
+                "author": (c.get("author") or {}).get("login") or (c.get("commit", {}).get("author") or {}).get("name", "")}
+               for c in commits]
+        return green["head_sha"], out[-5:]
+
+    def _suspect_line(self, inc: Incident) -> str:
+        if not inc.suspects:
+            return ""
+        if len(inc.suspects) == 1:
+            c = inc.suspects[0]
+            return f'Since the last green run: {c["sha"][:7]} "{c["title"]}"' + (f' by {c["author"]}' if c["author"] else "")
+        return f"Since the last green run ({inc.last_green[:7]}): {len(inc.suspects)} commits, newest {inc.suspects[-1]['sha'][:7]} \"{inc.suspects[-1]['title']}\""
+
     def _open_incident(self, gh: GitHub, run: dict) -> None:
         failure = logparse.Failure()
         for job in gh.failed_jobs(run["id"]):
@@ -240,20 +332,25 @@ class Engine:
             self._post(f"CI red on {self.watch.branch} (run #{run.get('run_number')}), but I couldn't find a failing pytest test in the log, so there's nothing I can reproduce. {run.get('html_url', '')}")
             return
         wt = str(self.data_dir / "worktrees" / str(run["id"]))
+        green, suspects = self._suspects(gh, run)
+        self._archive()
         self.incident = Incident(
             run_id=run["id"], run_number=run.get("run_number", 0), run_url=run.get("html_url", ""),
             head_sha=run["head_sha"], branch=self.watch.branch, test_ids=failure.test_ids,
             reasons=failure.reasons, command=failure.command, worktree=wt,
+            last_green=green, suspects=suspects, opened_at=self._clock(),
         )
         self.save()
         first = failure.test_ids[0]
         more = f" (+{len(failure.test_ids) - 1} more)" if len(failure.test_ids) > 1 else ""
         why = failure.reasons.get(first, "")
+        sus = self._suspect_line(self.incident)
         self._post(
             f"CI red on {self.watch.branch}: {first}{more}\n"
             f"{why}\n"
             f"run #{run.get('run_number')} · {run['head_sha'][:7]}\n"
-            "Reply fix and I'll reproduce it and prove a fix before offering a PR."
+            + (sus + "\n" if sus else "")
+            + "Reply fix and I'll reproduce it and prove a fix before offering a PR."
         )
 
     # ---- the fix turn -------------------------------------------------------------
@@ -268,13 +365,20 @@ class Engine:
         self._ensure_base_tree()
         self.save()
         ids = "\n".join(f"  - {t}: {inc.reasons.get(t, '')}" for t in inc.test_ids)
+        clue = ""
+        if inc.suspects:
+            listing = "\n".join(f"  - {c['sha'][:7]} {c['title']}" for c in inc.suspects)
+            clue = (f"The last green commit was {inc.last_green[:7]}. These commits came in since, so the cause is most likely in one of them:\n{listing}\n"
+                    f"Read what they changed first: git -C {inc.worktree} diff {inc.last_green} {inc.head_sha} -- . ':(exclude)tests'\n\n")
+        install = ("2. Nothing to install beyond pytest. " if self.watch.demo else
+                   f"2. In {inc.worktree}, install the project the way its CI does (for example python -m pip install -e . pytest), then ")
         return (
             "[ci-red-to-green] The user asked you to fix a red CI run.\n"
             f"Repo {self.watch.repo}, branch {inc.branch}, commit {inc.head_sha}, run #{inc.run_number}.\n"
-            f"Failing tests:\n{ids}\n\n"
+            f"Failing tests:\n{ids}\n\n" + clue +
             "Do exactly this, using the terminal tool:\n"
-            f"1. If {inc.worktree} doesn't exist yet: git clone https://github.com/{self.watch.repo}.git {inc.worktree} && git -C {inc.worktree} checkout --detach {inc.head_sha}\n"
-            f"2. In {inc.worktree}, install the project the way its CI does (for example python -m pip install -e . pytest), then reproduce BEFORE changing anything: {inc.command}\n"
+            f"1. If {inc.worktree} doesn't exist yet: git clone https://github.com/{self.watch.repo}.git {inc.worktree} && git -C {inc.worktree} checkout --detach {inc.head_sha}\n" +
+            install + f"Reproduce BEFORE changing anything, twice, as two separate terminal calls in {inc.worktree}: {inc.command}\n"
             f"3. Run the whole suite once before changing anything: python -m pytest -rA\n"
             "4. Fix the cause in the source code. Do not edit tests, conftest.py, pytest/tox/setup config or .github: "
             "the PR is built from source files only, so test edits are dropped and the fix would be refused.\n"
@@ -287,10 +391,7 @@ class Engine:
         inc = self.incident
         if inc.base_tree:
             return
-        gh = self.gh()
-        commit = gh._req("GET", f"/repos/{self.watch.repo}/git/commits/{inc.head_sha}")
-        tree = gh._req("GET", f"/repos/{self.watch.repo}/git/trees/{commit['tree']['sha']}?recursive=1")
-        inc.base_tree = {e["path"]: e["sha"] for e in tree.get("tree", []) if e.get("type") == "blob"}
+        inc.base_tree = self.gh().tree(inc.head_sha)
 
     def _in_worktree(self, command: str, workdir: str | None) -> bool:
         wt = self.incident.worktree if self.incident else None
@@ -349,6 +450,32 @@ class Engine:
             inc.status = "ready"
         self.save()
 
+    def diff(self, max_lines: int = 60) -> str:
+        """Unified diff of the source files that would go into the PR, against the red commit."""
+        inc = self.incident
+        src, _ = self.source_changes()
+        if not src:
+            return ""
+        out: list[str] = []
+        gh = None
+        for path, kind in sorted(src.items()):
+            old = b""
+            sha = inc.base_tree.get(path)
+            if sha:
+                if sha not in self._blobs:
+                    gh = gh or self.gh()
+                    try:
+                        self._blobs[sha] = gh.blob(sha)
+                    except Exception:
+                        self._blobs[sha] = b""
+                old = self._blobs[sha]
+            new = b"" if kind == "deleted" else Path(inc.worktree, path).read_bytes()
+            out.extend(difflib.unified_diff(old.decode("utf-8", "replace").splitlines(), new.decode("utf-8", "replace").splitlines(),
+                                            f"a/{path}", f"b/{path}", lineterm="", n=1))
+        if len(out) > max_lines:
+            out = out[:max_lines] + [f"... ({len(out) - max_lines} more lines)"]
+        return "\n".join(out)
+
     # ---- the card -------------------------------------------------------------------
     def proof(self) -> dict:
         inc = self.incident
@@ -368,10 +495,19 @@ class Engine:
         p = self.proof()
         lines = [f"Fix for run #{inc.run_number} on {inc.branch}"]
         for t, s in p["tests"].items():
-            lines.append(f"{t}: {'FAILED before the fix' if s['failed_before'] else 'never seen failing before the fix'} · PASSED after it {min(s['passes_after'], ledger.PASSES_NEEDED)}/{ledger.PASSES_NEEDED} {'✓' if s['passes_after'] >= ledger.PASSES_NEEDED else ''}".rstrip())
+            before = ("flaky: passed before any change" if s["flaky"] else
+                      f"FAILED before the fix {min(s['fails_before'], ledger.FAILS_NEEDED)}/{ledger.FAILS_NEEDED}")
+            lines.append(f"{t}: {before} · PASSED after it {min(s['passes_after'], ledger.PASSES_NEEDED)}/{ledger.PASSES_NEEDED} {'✓' if s['passes_after'] >= ledger.PASSES_NEEDED else ''}".rstrip())
         lines.append(f"suite: {p['suite']}")
         lines.append("test files untouched" if not p["protected"] else "test files changed: " + ", ".join(sorted(p["protected"])))
         lines.append("changed: " + (", ".join(f"{k} {path}" for path, k in sorted(p["source"].items())) or "nothing"))
+        sus = self._suspect_line(inc)
+        if sus:
+            lines.append(sus)
+        d = self.diff(30)
+        if d:
+            lines.append("")
+            lines.append(d)
         if not p["accepted"]:
             lines.append("Not ready: " + "; ".join(p["reasons"]))
         return "\n".join(lines)
@@ -379,11 +515,15 @@ class Engine:
     def pr_body(self) -> str:
         inc = self.incident
         p = self.proof()
-        rows = "\n".join(f"| `{t}` | {'FAILED' if s['failed_before'] else '-'} | PASSED {min(s['passes_after'], ledger.PASSES_NEEDED)}/{ledger.PASSES_NEEDED} runs in a row |" for t, s in p["tests"].items())
+        rows = "\n".join(f"| `{t}` | FAILED {min(s['fails_before'], ledger.FAILS_NEEDED)}/{ledger.FAILS_NEEDED} runs | PASSED {min(s['passes_after'], ledger.PASSES_NEEDED)}/{ledger.PASSES_NEEDED} runs in a row |" for t, s in p["tests"].items())
+        sus = ""
+        if inc.suspects:
+            sus = "Commits since the last green run (" + inc.last_green[:7] + "): " + ", ".join(f"{c['sha'][:7]} {c['title']}" for c in inc.suspects) + ".\n\n"
         return (
             f"CI went red on `{inc.branch}` at {inc.head_sha[:7]} ([run #{inc.run_number}]({inc.run_url})).\n\n"
             "This fix was checked locally by Hermes before this PR was opened. The results below come from pytest's own output, recorded by the plugin, not from the model:\n\n"
             "| test | before the fix | after the fix |\n|---|---|---|\n" + rows + "\n\n"
+            + sus +
             f"Full suite: {p['suite']}. Test files untouched: this commit contains source files only, so CI here runs the original tests.\n\n"
             "Opened with ci-red-to-green for Hermes Agent. It never pushes to the base branch and never merges."
         )
@@ -402,6 +542,11 @@ class Engine:
         sha = gh.create_branch_commit(inc.head_sha, files, f"Fix {first} (CI run #{inc.run_number})", branch)
         pr = gh.open_pr(branch, inc.branch, f"Fix {first} (red CI run #{inc.run_number})", self.pr_body())
         inc.pr_url, inc.pr_branch, inc.pr_sha, inc.status = pr.get("html_url", ""), branch, sha, "pr_open"
+        if self.watch.demo:
+            inc.status = "done"
+            self.save()
+            return (f"Demo: no GitHub here, so the commit was written as a patch: {inc.pr_url}\n"
+                    "With a real repo, this opens a PR with source files only and waits for GitHub's CI to go green.")
         self.save()
         return f"PR opened: {inc.pr_url}\nI'll tell you here when GitHub's CI finishes on it."
 
@@ -428,9 +573,13 @@ class Engine:
                 "status": inc.status, "run_number": inc.run_number, "run_url": inc.run_url, "branch": inc.branch,
                 "sha": inc.head_sha[:7], "tests": inc.test_ids, "reasons": inc.reasons,
                 "proof": p and {"accepted": p["accepted"], "reasons": p["reasons"], "tests": p["tests"], "suite": p["suite"],
-                                  "source": p["source"], "protected": p["protected"], "needed": ledger.PASSES_NEEDED},
+                                  "source": p["source"], "protected": p["protected"], "needed": ledger.PASSES_NEEDED, "needed_before": ledger.FAILS_NEEDED},
                 "pr_url": inc.pr_url, "pr_run_url": inc.pr_run_url,
+                "suspects": inc.suspects, "last_green": inc.last_green[:7],
+                "diff": self.diff(80) if inc.status in ("fixing", "ready", "pr_open", "done") and os.path.isdir(inc.worktree) else "",
             }
+        out["demo"] = bool(self.watch and self.watch.demo)
+        out["history"] = self.history[:20]
         return out
 
     def discard(self) -> str:

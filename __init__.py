@@ -16,6 +16,7 @@ _ENGINE = None
 
 TOKEN_ENV = "CI_RED_TO_GREEN_GITHUB_TOKEN"
 USAGE = (
+    "/ci demo                       try it now: a real humanize bug, no token or GitHub needed\n"
     "/ci watch owner/repo [branch]  start watching a branch\n"
     "/ci                            show the fix proof and open the PR\n"
     "/ci status                     what I'm watching\n"
@@ -36,12 +37,25 @@ def register(ctx):
     from .engine import Engine
 
     global _ENGINE
-    engine = Engine(plugin_data_dir("ci-red-to-green"), token_fn=_token, post=lambda text: ctx.post_message(text))
+    def post(text: str) -> None:
+        try:
+            ctx.post_message(text)
+        except Exception:  # no chat bound (started from Desktop): the pane still shows it
+            logger.info("ci-red-to-green: no chat to post to")
+
+    def changed(payload: dict) -> None:
+        from hermes_cli.plugin_events import broadcast_plugin_event
+
+        broadcast_plugin_event("ci-red-to-green", "state.changed", payload)
+
+    engine = Engine(plugin_data_dir("ci-red-to-green"), token_fn=_token, post=post, on_change=changed)
     _ENGINE = engine
 
     def ci(raw_args: str, **_kw) -> str:
         args = (raw_args or "").split()
         sub = args[0].lower() if args else ""
+        if sub == "demo":
+            return engine.start_demo() + "\n\nReply fix to start."
         if sub == "watch":
             if len(args) < 2 or "/" not in args[1]:
                 return "Usage: /ci watch owner/repo [branch]"
@@ -54,7 +68,7 @@ def register(ctx):
             bound = contextvars.copy_context()
             engine.start_thread(runner=lambda fn: bound.run(fn))
             return msg
-        if sub != "stop" and engine.watch and not engine.thread_alive():
+        if sub != "stop" and engine.watch and not engine.watch.demo and not engine.thread_alive():
             # The watcher thread dies with the gateway; any /ci in this chat re-arms it here.
             bound = contextvars.copy_context()
             engine.start_thread(runner=lambda fn: bound.run(fn))
@@ -101,7 +115,7 @@ def register(ctx):
         except Exception:
             logger.exception("ci-red-to-green: could not record a test run")
 
-    ctx.register_command("ci", ci, description="Turn red CI into a proven fix PR", args_hint="[watch owner/repo [branch]|status|discard|stop]")
+    ctx.register_command("ci", ci, description="Turn red CI into a proven fix PR", args_hint="[demo|watch owner/repo [branch]|status|discard|stop]")
     ctx.register_hook("pre_llm_call", on_pre_llm_call)
     ctx.register_hook("pre_tool_call", on_pre_tool_call)
     ctx.register_hook("post_tool_call", on_post_tool_call)

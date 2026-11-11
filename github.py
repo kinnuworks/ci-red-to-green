@@ -84,6 +84,21 @@ class GitHub:
     def job_log(self, job_id: int) -> str:
         return self._req("GET", f"/repos/{self.repo}/actions/jobs/{job_id}/logs", raw=True)
 
+    def tree(self, sha: str) -> dict[str, str]:
+        """path -> blob sha for every file at a commit."""
+        commit = self._req("GET", f"/repos/{self.repo}/git/commits/{sha}")
+        tree = self._req("GET", f"/repos/{self.repo}/git/trees/{commit['tree']['sha']}?recursive=1")
+        return {e["path"]: e["sha"] for e in tree.get("tree", []) if e.get("type") == "blob"}
+
+    def blob(self, sha: str) -> bytes:
+        out = self._req("GET", f"/repos/{self.repo}/git/blobs/{sha}")
+        return base64.b64decode(out.get("content", ""))
+
+    def compare(self, base: str, head: str) -> list[dict]:
+        """Commits in head that aren't in base, oldest first."""
+        out = self._req("GET", f"/repos/{self.repo}/compare/{base}...{head}")
+        return out.get("commits", [])
+
     def commit(self, sha: str) -> dict:
         return self._req("GET", f"/repos/{self.repo}/commits/{sha}")
 

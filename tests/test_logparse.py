@@ -20,7 +20,7 @@ def test_finds_failed_ids_and_reasons():
 
 def test_command_reproduces_only_the_failures():
     f = logparse.parse_log(LOG)
-    assert f.command == "python -m pytest -rA tests/test_dates.py::test_parse_iso tests/test_money.py::test_round[half-up]"
+    assert f.command == "python -m pytest -rA tests/test_dates.py::test_parse_iso 'tests/test_money.py::test_round[half-up]'"
 
 
 def test_no_pytest_failure_is_falsy():
@@ -37,3 +37,21 @@ def test_duplicates_collapse():
 def test_error_lines_count():
     f = logparse.parse_log("ERROR tests/a.py::t - fixture missing\n")
     assert f.test_ids == ["tests/a.py::t"]
+
+
+def test_parametrized_ids_with_spaces():
+    log = (
+        "2026-11-11T10:00:00.1Z FAILED tests/test_filesize.py::test_naturalsize[test_args31-1.0 MB]"
+        " - AssertionError: assert '1000.0 kB' == '1.0 MB'\n"
+        "2026-11-11T10:00:00.2Z \x1b[31mFAILED\x1b[0m tests/test_filesize.py::test_naturalsize[test_args32-1.0 GB] - AssertionError\n"
+    )
+    f = logparse.parse_log(log)
+    assert f.test_ids == [
+        "tests/test_filesize.py::test_naturalsize[test_args31-1.0 MB]",
+        "tests/test_filesize.py::test_naturalsize[test_args32-1.0 GB]",
+    ]
+    assert f.reasons[f.test_ids[0]] == "AssertionError: assert '1000.0 kB' == '1.0 MB'"
+    assert f.command == (
+        "python -m pytest -rA 'tests/test_filesize.py::test_naturalsize[test_args31-1.0 MB]'"
+        " 'tests/test_filesize.py::test_naturalsize[test_args32-1.0 GB]'"
+    )

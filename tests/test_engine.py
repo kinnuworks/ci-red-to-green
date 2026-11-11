@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 
@@ -25,12 +26,15 @@ class FakeGH:
     def job_log(self, job_id):
         return LOG
 
-    def _req(self, method, path, body=None, raw=False):
-        if "/git/commits/" in path:
-            return {"tree": {"sha": "t0"}}
-        if "/git/trees/" in path:
-            return {"tree": [{"path": p, "type": "blob", "sha": E.git_blob_sha(b)} for p, b in BASE.items()]}
-        raise AssertionError(path)
+    def tree(self, sha):
+        return {p: E.git_blob_sha(b) for p, b in BASE.items()}
+
+    def blob(self, sha):
+        return {E.git_blob_sha(b): b for b in BASE.values()}[sha]
+
+    def compare(self, base, head):
+        self.state["compared"] = (base, head)
+        return self.state.get("commits", [])
 
     def create_branch_commit(self, base_sha, files, message, branch):
         self.state["commit"] = (base_sha, files, message, branch)
@@ -243,6 +247,8 @@ def test_snapshot_for_desktop(tmp_path):
         ("cd /w && pip install -e .", True),
         ("cd /w && make test", True),
         ("cd /w && ls && python setup.py develop", True),
+        ("test -d /w && echo exists || (git clone https://github.com/o/r /w && git -C /w checkout --detach abc)", False),
+        ("[ -d /w ] || mkdir -p /w", False),
     ],
 )
 def test_runs_repo_code(cmd, runs):
@@ -276,3 +282,92 @@ def test_snapshot_skips_gitignored_untracked_files(tmp_path):
     (root / "kept.log").write_text("tracked\n")
     snap = E.blob_snapshot(str(root), {"kept.log": "abc"})
     assert set(snap) == {".gitignore", "pkg/mod.py", "pkg/new.py", "kept.log"}
+
+
+def green_run(n, sha):
+    return {"id": 100 + n, "run_number": n, "status": "completed", "conclusion": "success", "head_sha": sha, "html_url": ""}
+
+
+def test_alert_names_the_commit_since_the_last_green_run(tmp_path):
+    eng, posts = make(tmp_path)
+    eng.start_watch("o/r", "main")
+    FakeGH.state["runs"] = [red_run(12), green_run(11, "b" * 40)]
+    FakeGH.state["commits"] = [{"sha": "a" * 40, "commit": {"message": "Simplify month parsing\n\nbody"}, "author": {"login": "dev1"}}]
+    eng.tick()
+    assert FakeGH.state["compared"] == ("b" * 40, "a" * 40)
+    assert 'Since the last green run: aaaaaaa "Simplify month parsing" by dev1' in posts[-1]
+    assert eng.wants_fix("fix")
+    ctx = eng.fix_context()
+    assert "The last green commit was bbbbbbb" in ctx and "aaaaaaa Simplify month parsing" in ctx
+    assert eng.snapshot()["incident"]["suspects"][0]["author"] == "dev1"
+
+
+def test_card_shows_the_diff_and_flaky_tests_are_refused(tmp_path):
+    eng, posts = make(tmp_path)
+    eng.start_watch("o/r", "main")
+    FakeGH.state["runs"] = [red_run()]
+    eng.tick()
+    eng.fix_context()
+    write_worktree(eng, BASE)
+    term(eng, "python -m pytest -rA " + T, f"FAILED {T}\n", 1)
+    term(eng, "python -m pytest -rA " + T, f"PASSED {T}\n", 0)  # passes with nothing changed: flaky
+    write_worktree(eng, {"src/dates.py": b"def month(s):\n    return int(s[5:7])\n"})
+    for _ in range(3):
+        term(eng, "python -m pytest -rA " + T, f"PASSED {T}\n", 0)
+    card = eng.card_text()
+    assert "flaky: passed before any change" in card and "Not ready" in card
+    assert "-    return int(s[5:7]) - 1" in card and "+    return int(s[5:7])" in card
+    assert eng.open_pr().startswith("Not opening a PR")
+
+
+def test_demo_runs_the_whole_loop_without_github(tmp_path):
+    from crg import demo
+
+    posts = []
+    eng = E.Engine(tmp_path / "data", token_fn=lambda: None, post=posts.append)
+    msg = eng.start_demo()
+    assert "PR #329" in msg
+    inc = eng.incident
+    assert inc and inc.status == "alerted" and len(inc.test_ids) == 4
+    assert "CI red on main: tests/test_filesize.py::test_naturalsize[test_args12-1.0 MB]" in posts[-1]
+    assert "'1000.0 kB' == '1.0 MB'" in posts[-1]
+    assert eng.wants_fix("fix")
+    ctx = eng.fix_context()
+    assert "Nothing to install beyond pytest" in ctx
+    ids = " ".join(f"FAILED {t}\n" for t in inc.test_ids)
+    passed = "".join(f"PASSED {t}\n" for t in inc.test_ids)
+    for _ in range(2):
+        term(eng, inc.command, ids.replace(" FAILED", "FAILED"), 1)
+    fixed = Path(inc.worktree, "humanize_mini/filesize.py")
+    src = fixed.read_text().replace(
+        "    space = \"\" if gnu else \" \"\n",
+        "    if exp < len(suffix) and abs(float(format % (abs_bytes / (base**exp)))) >= base:\n        exp += 1\n    space = \"\" if gnu else \" \"\n",
+    )
+    fixed.write_text(src)
+    for _ in range(3):
+        term(eng, inc.command, passed, 0)
+    assert eng.incident.status == "ready", eng.proof()["reasons"]
+    out = eng.open_pr()
+    assert "patch" in out and eng.incident.status == "done"
+    patch = Path(eng.incident.pr_url).read_text()
+    assert "+++ b/humanize_mini/filesize.py" in patch and "+        exp += 1" in patch
+    assert "tests/" not in patch
+    assert demo.SAMPLE.joinpath("humanize_mini/filesize.py").read_text().count("exp += 1") == 0  # sample untouched
+
+
+def test_snapshot_handles_nested_gitignore_and_negation(tmp_path):
+    root = tmp_path / "w"
+    (root / "pkg" / "gen").mkdir(parents=True)
+    (root / ".gitignore").write_text("*.log\n!keep.log\nbuild/\n")
+    (root / "pkg" / ".gitignore").write_text("gen/\n*.tmp\n")
+    (root / "pkg" / "mod.py").write_text("x = 1\n")
+    (root / "pkg" / "gen" / "out.py").write_text("generated\n")
+    (root / "pkg" / "scratch.tmp").write_text("t\n")
+    (root / "keep.log").write_text("k\n")
+    (root / "noise.log").write_text("n\n")
+    (root / "docs").mkdir()
+    (root / "docs" / "build").mkdir()
+    (root / "docs" / "build" / "index.html").write_text("<html/>\n")
+    (root / "top.tmp").write_text("not ignored at the root\n")
+    snap = E.blob_snapshot(str(root))
+    assert set(snap) == {".gitignore", "pkg/.gitignore", "pkg/mod.py", "keep.log", "top.tmp"}

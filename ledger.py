@@ -17,9 +17,13 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from .logparse import TEST_ID
+
 # pytest -rA short summary lines: "PASSED tests/x.py::test_y", "FAILED tests/x.py::test_y - msg"
-_RESULT = re.compile(r"^(PASSED|FAILED|ERROR|SKIPPED|XFAIL|XPASS) (\S+?\.py(?:::\S+)?)")
+_RESULT = re.compile(r"^(PASSED|FAILED|ERROR|SKIPPED|XFAIL|XPASS) (" + TEST_ID + r")(?: - .*)?$")
 PASSES_NEEDED = 3
+# Reproduced twice before any change; a test that passes before the change is flaky, not broken.
+FAILS_NEEDED = 2
 
 
 _SESSION = re.compile(r"^=+ test session starts =+$", re.M)
@@ -74,8 +78,15 @@ class Ledger:
         return run
 
     # ---- the gate -------------------------------------------------------------
+    def fails_before(self, tid: str) -> int:
+        return sum(1 for r in self.runs if not r.changed and r.results.get(tid) in ("FAILED", "ERROR"))
+
     def failed_before(self, tid: str) -> bool:
-        return any(not r.changed and r.results.get(tid) in ("FAILED", "ERROR") for r in self.runs)
+        return self.fails_before(tid) >= FAILS_NEEDED
+
+    def flaky(self, tid: str) -> bool:
+        """Passed at least once before any source change: the failure doesn't reproduce reliably."""
+        return any(not r.changed and r.results.get(tid) == "PASSED" for r in self.runs)
 
     def passes_after(self, tid: str) -> int:
         """Consecutive PASSED results for tid, counted back from the latest changed run."""
@@ -101,8 +112,10 @@ class Ledger:
         """(accepted, reasons). Reasons explain every unmet condition."""
         why: list[str] = []
         for tid in self.test_ids:
-            if not self.failed_before(tid):
-                why.append(f"{tid}: never seen failing before the change")
+            if self.flaky(tid):
+                why.append(f"{tid}: passed before any change, so it's flaky, not broken")
+            elif not self.failed_before(tid):
+                why.append(f"{tid}: {self.fails_before(tid)}/{FAILS_NEEDED} failing runs before the change")
             p = self.passes_after(tid)
             if p < PASSES_NEEDED:
                 why.append(f"{tid}: {p}/{PASSES_NEEDED} passing runs after the change")
@@ -117,6 +130,7 @@ class Ledger:
         return {
             "accepted": ok,
             "reasons": why,
-            "tests": {t: {"failed_before": self.failed_before(t), "passes_after": self.passes_after(t)} for t in self.test_ids},
+            "tests": {t: {"failed_before": self.failed_before(t), "fails_before": self.fails_before(t), "flaky": self.flaky(t),
+                          "passes_after": self.passes_after(t)} for t in self.test_ids},
             "suite": "not run" if nf is None else ("no new failures" if not nf else f"{len(nf)} new failures"),
         }

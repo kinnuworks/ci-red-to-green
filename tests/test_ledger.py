@@ -13,18 +13,30 @@ def lg_with(*runs):
 
 
 def test_accepts_fail_before_then_three_passes():
-    ok, why = lg_with((FAIL, False), (PASS, True), (PASS, True), (PASS, True)).verdict()
+    ok, why = lg_with((FAIL, False), (FAIL, False), (PASS, True), (PASS, True), (PASS, True)).verdict()
     assert ok, why
+
+
+def test_one_failing_run_before_is_not_enough():
+    ok, why = lg_with((FAIL, False), (PASS, True), (PASS, True), (PASS, True)).verdict()
+    assert not ok and "1/2 failing runs before" in why[0]
+
+
+def test_a_pass_before_the_change_means_flaky():
+    lg = lg_with((FAIL, False), (PASS, False), (FAIL, False), (PASS, True), (PASS, True), (PASS, True))
+    ok, why = lg.verdict()
+    assert lg.flaky(T) and not ok and "flaky" in why[0]
+    assert lg.summary()["tests"][T]["flaky"]
 
 
 def test_refuses_without_seeing_the_failure():
     ok, why = lg_with((PASS, True), (PASS, True), (PASS, True)).verdict()
     assert not ok
-    assert "never seen failing" in why[0]
+    assert "0/2 failing runs before" in why[0]
 
 
 def test_refuses_with_two_passes():
-    ok, why = lg_with((FAIL, False), (PASS, True), (PASS, True)).verdict()
+    ok, why = lg_with((FAIL, False), (FAIL, False), (PASS, True), (PASS, True)).verdict()
     assert not ok
     assert "2/3" in why[0]
 
@@ -69,6 +81,18 @@ def test_several_sessions_in_one_output_count_separately():
     assert len(chunks) == 3
     lg = ledger.Ledger([T])
     lg.record(FAIL, 1, False)
+    lg.record(FAIL, 1, False)
     for c in chunks:
         lg.record(c, None, True)
     assert lg.passes_after(T) == 3 and lg.verdict()[0]
+
+
+def test_results_with_spaced_params():
+    out = (
+        "PASSED tests/test_filesize.py::test_naturalsize[test_args31-1.0 MB]\n"
+        "FAILED tests/test_filesize.py::test_naturalsize[test_args32-1.0 GB] - AssertionError: x\n"
+    )
+    assert ledger.parse_results(out) == {
+        "tests/test_filesize.py::test_naturalsize[test_args31-1.0 MB]": "PASSED",
+        "tests/test_filesize.py::test_naturalsize[test_args32-1.0 GB]": "FAILED",
+    }
